@@ -1,0 +1,60 @@
+# Coach IA onboarding flow
+
+The first 3 seconds decide whether a user engages with the Coach IA at
+all. Design the empty state, not just the chat itself.
+
+## Empty state (before the first message)
+
+1. **Greeting** — one sentence, stating what it actually helps with, in
+   a direct coach voice. Not "Hi! How can I help you today?" (generic
+   chatbot copy).
+   > "Ask me about your training — an exercise, your plan, or what's
+   > next."
+2. **Suggested prompts** — 3-4 tappable chips with real questions this
+   coach can actually answer well from the user's own data. Not generic
+   ("Tell me about fitness") — specific to what it can ground itself in.
+   > "What's next in my plan?" · "How do I do a Bulgarian split squat?"
+   > · "How's my pull-up progress?"
+3. Chips populate the input and auto-send on tap — don't make the user
+   retype a question they already selected.
+
+## First message sent
+
+- Render the user's message **immediately** (optimistic, before the
+  network round trip resolves) — `useChat`'s `sendMessage` already does
+  this. Never show a blank screen while waiting for the request to even
+  start.
+- Show the "Thinking…" state (`status === "submitted"`) within the same
+  frame the user's message appears — no gap where nothing is happening.
+- First assistant tokens should appear well under 2s for a snappy feel;
+  see `reference/patterns.md` for the latency techniques that get you
+  there.
+
+## A write proposal arrives mid-conversation
+
+- Render it as a distinct block — not plain chat text — with a clear
+  before/after and explicit Confirm/Reject actions (see
+  `reference/patterns.md`, "A write proposal in the UI is a fifth
+  state").
+- Confirming should show a clear "applied" state once persistence
+  succeeds; rejecting should let the conversation continue naturally,
+  without the coach re-proposing the same change immediately.
+
+## Returning user
+
+- If conversation history persists across a session, restore it — don't
+  force a re-greeting every visit.
+- If it doesn't persist (fine for a v1), the empty state should still
+  reappear cleanly, not show a flash of a previous stale state.
+
+## Error/edge states to design for, not just handle
+
+- Model fails / times out → the `CoachPanel.tsx.template` error banner +
+  retry, not a silent failure or a raw stack trace.
+- User sends a message while offline → detect and show "You're offline"
+  rather than an infinite spinner (this app is a PWA — offline is a real
+  case, not an edge case).
+- User asks something wildly off-domain → the system prompt's domain
+  boundaries section handles this at the model level; verify by hand
+  that the reply actually redirects gracefully rather than answering
+  anyway or refusing curtly.

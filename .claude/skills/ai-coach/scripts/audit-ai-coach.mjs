@@ -1,10 +1,10 @@
 #!/usr/bin/env node
-// AI-specific static checks for the companion feature. Generic Server/
+// AI-specific static checks for the Coach IA feature. Generic Server/
 // Client boundary and bundle-size checks already live in the `performance`
 // skill — this only covers what's specific to LLM integration. No deps.
 // Node >= 18.
 //
-// Usage: node .claude/skills/ai-companion/scripts/audit-companion.mjs [path]
+// Usage: node .claude/skills/ai-coach/scripts/audit-ai-coach.mjs [path]
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, extname, relative } from "node:path";
@@ -59,7 +59,7 @@ function auditFile(path, findings, providerUsageFiles) {
       file: rel,
       rule: "server-only-ai-import-in-client",
       detail:
-        "\"use client\" file imports server-only AI SDK code (ai / @ai-sdk/<provider>). This bundles provider logic (and reads of API keys) into client JS — move the call behind a route handler and call it via fetch/useChat instead.",
+        "\"use client\" file imports server-only AI SDK code (ai / @ai-sdk/<provider>). This bundles provider/tool logic (and reads of API keys) into client JS — move the call behind a route handler and call it via fetch/useChat instead.",
     });
   }
 
@@ -120,12 +120,12 @@ function main() {
   if (asJson) {
     console.log(JSON.stringify({ findings }, null, 2));
   } else if (findings.length === 0) {
-    console.log(`ai-companion audit: 0 findings across ${files.length} files in ${root}`);
+    console.log(`ai-coach audit: 0 findings across ${files.length} files in ${root}`);
   } else {
     for (const f of findings) {
       console.log(`[${f.rule}] ${f.file}\n    ${f.detail}`);
     }
-    console.log(`\nai-companion audit: ${findings.length} finding(s) in ${root}`);
+    console.log(`\nai-coach audit: ${findings.length} finding(s) in ${root}`);
   }
   process.exitCode = findings.length > 0 ? 1 : 0;
 }

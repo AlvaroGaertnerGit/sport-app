@@ -1,5 +1,6 @@
 // Template: presentational component, no visual variants.
-// Modeled on src/components/ui/card.tsx (shadcn base-nova style).
+// Modeled on shadcn's card.tsx pattern (compound Header/Content/Footer parts) —
+// adapt to whichever shadcn style this project installs.
 // Use for compound/structural pieces (Header/Content/Footer-style parts)
 // that only need one look. If you need variant/size props, start from
 // variant-component.tsx.template instead.

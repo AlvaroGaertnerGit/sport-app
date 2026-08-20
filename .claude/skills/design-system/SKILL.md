@@ -1,12 +1,18 @@
 ---
 name: design-system
-description: Maintain this project's design system (Tailwind v4 + shadcn tokens for color, radius, typography, shadow, spacing, defined in src/app/globals.css). Use whenever creating or styling UI, adding a component, choosing colors/spacing/radius, or when asked to audit design consistency, find hardcoded colors, list design tokens, or check accessibility of a component.
+description: Maintain Sport Coach's design system (Tailwind v4 tokens for color, radius, typography, shadow, spacing, defined in src/app/globals.css) for a mobile-first training PWA. Use whenever creating or styling UI, adding a component, choosing colors/spacing/radius, or when asked to audit design consistency, find hardcoded colors, list design tokens, or check accessibility of a component.
 ---
 
-Source of truth: `src/app/globals.css` (`:root` / `.dark` custom properties,
-mapped in `@theme inline`). Reusable primitives live in `src/components/ui/`,
-built with `cva` (see `button.tsx`) and merged with `cn()` from
-`src/lib/utils.ts`. Never restate token values from memory — the tokens
+Source of truth: `src/app/globals.css` (custom properties in `:root` and
+its dark-mode counterpart, mapped in `@theme inline`). **As of this
+project's current state, `globals.css` only defines `--background` /
+`--foreground` and dark mode via `@media (prefers-color-scheme: dark)`
+— there is no `src/components/ui/`, no `cva`, no `cn()` helper yet.**
+The first real UI work on this project is exactly where the semantic
+token set (`background`, `foreground`, `card`, `border`, `muted`,
+`primary`, ...) gets defined — don't invent a component against tokens
+that don't exist yet; define them first, deliberately, then build.
+Never restate token values from memory once they exist — the tokens
 change; the commands below don't.
 
 ## Before writing any className

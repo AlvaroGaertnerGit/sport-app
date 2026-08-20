@@ -1,14 +1,19 @@
-// src/components/companion/ChatPanel.tsx
+// src/components/coach/CoachPanel.tsx
 //
 // Presentational only — no "ai" or "@ai-sdk/*" import anywhere in this
-// file. It receives everything as props from useCompanionChat() (see
-// use-companion-chat.ts.template) via a thin parent. That boundary is
-// what makes this component testable/storyboardable without a live
-// model, and is what audit-companion.mjs checks for.
+// file. It receives everything as props from useCoachChat() (see
+// use-coach-chat.ts.template) via a thin parent. That boundary is what
+// makes this component testable/storyboardable without a live model, and
+// is what audit-ai-coach.mjs checks for.
 //
-// Message shape mirrors Vercel AI SDK v5's `UIMessage` (role + parts[]).
-// Once @ai-sdk/react is installed, replace CompanionMessage below with
+// Message shape mirrors the AI SDK's `UIMessage` (role + parts[]). Once
+// @ai-sdk/react is installed, replace CoachMessage below with
 // `import type { UIMessage } from "ai"` and drop this local type.
+//
+// A write-tool proposal (replace exercise, reorder plan, ...) is a
+// distinct state, not plain text — see reference/patterns.md. This
+// template covers the base chat states only; add a proposal
+// preview/confirm block once write tools exist.
 //
 // Styling: semantic tokens + cva only — see the design-system skill
 // before changing any className here. Composition/API shape follows
@@ -18,17 +23,17 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
-type CompanionMessagePart = { type: "text"; text: string }
-type CompanionMessage = {
+type CoachMessagePart = { type: "text"; text: string }
+type CoachMessage = {
   id: string
   role: "user" | "assistant" | "system"
-  parts: CompanionMessagePart[]
+  parts: CoachMessagePart[]
 }
-type CompanionStatus = "ready" | "submitted" | "streaming" | "error"
+type CoachStatus = "ready" | "submitted" | "streaming" | "error"
 
-interface ChatPanelProps {
-  messages: CompanionMessage[]
-  status: CompanionStatus
+interface CoachPanelProps {
+  messages: CoachMessage[]
+  status: CoachStatus
   error?: Error
   onSend: (text: string) => void
   onRetry: () => void
@@ -36,7 +41,7 @@ interface ChatPanelProps {
   className?: string
 }
 
-function ChatPanel({
+function CoachPanel({
   messages,
   status,
   error,
@@ -44,7 +49,7 @@ function ChatPanel({
   onRetry,
   onStop,
   className,
-}: ChatPanelProps) {
+}: CoachPanelProps) {
   const [input, setInput] = React.useState("")
   const isBusy = status === "submitted" || status === "streaming"
 
@@ -58,7 +63,7 @@ function ChatPanel({
 
   return (
     <div
-      data-slot="chat-panel"
+      data-slot="coach-panel"
       className={cn("flex h-full flex-col rounded-lg border border-border bg-card", className)}
     >
       {/* aria-live announces streamed replies to screen readers without
@@ -72,7 +77,7 @@ function ChatPanel({
         {messages.map((message) => (
           <div
             key={message.id}
-            data-slot="chat-message"
+            data-slot="coach-message"
             data-role={message.role}
             className={cn(
               "max-w-[80%] rounded-lg px-3 py-2 text-sm",
@@ -117,7 +122,7 @@ function ChatPanel({
           value={input}
           onChange={(e) => setInput(e.target.value)}
           disabled={isBusy}
-          placeholder="Ask about a project, or how something was built…"
+          placeholder="Ask about an exercise, your routine, or what's next…"
           aria-label="Message"
           className="h-10 flex-1 rounded-md border border-border bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
         />
@@ -143,4 +148,4 @@ function ChatPanel({
   )
 }
 
-export { ChatPanel, type ChatPanelProps, type CompanionMessage }
+export { CoachPanel, type CoachPanelProps, type CoachMessage }

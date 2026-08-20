@@ -1,7 +1,12 @@
 ---
 name: motion
-description: Author, review, or fix any Framer Motion animation in this project — transitions, hover/tap states, scroll reveals, page/layout transitions, or `motion.*` components. Also use to audit existing animations for inconsistent durations/easings, missing reduced-motion support, or distracting motion.
+description: Author, review, or fix any Framer Motion animation in Sport Coach — interaction/progress feedback (set completed, rest timer, rep counter), session-state transitions, scroll reveals, page/layout transitions, or `motion.*` components. Also use to audit existing animations for inconsistent durations/easings, missing reduced-motion support, or distracting motion.
 ---
+
+**Note on current project state**: `framer-motion` is not installed yet
+in this project — install and verify against Context7 before assuming
+any API shape below matches the version that lands. The token/pattern
+guidance is stack-ready, not yet stack-verified here.
 
 `motion` is the single source of truth for animation in this project. Every
 `motion.*` usage, transition, and variant should trace back to the tokens and
@@ -62,6 +67,28 @@ what's wrong, the fix.
   own tuning.
 - **Import from `"framer-motion"`.** That's the package in this project's
   `package.json` (v12) — don't switch to the `"motion"` package alias.
+
+## Sport Coach contexts
+
+Where these rules actually get applied in this app — ground the generic
+golden rules in these, don't invent new motion language per feature:
+
+- **Set/rep completion feedback** — a short `scale`/`opacity` pulse on
+  logging a set (transform/opacity only, per the golden rules). It's
+  confirmation, not celebration — keep it in the "subtle over showy"
+  range even on a personal-best set.
+- **Rest timers / countdowns** — the numeric display itself should not
+  animate every tick (that's motion for no reason, and it's also the
+  kind of per-frame re-render `performance` would flag); animate state
+  *transitions* only (timer starting, timer ending, a warning state at
+  low time remaining).
+- **Session-state transitions** (`in_progress` → `completed` /
+  `abandoned`, see `CLAUDE.md` §5) — a single clear transition per state
+  change, reusing `src/lib/motion/` tokens. Don't animate the same
+  transition differently in the workout flow vs. the history view.
+- **"What's next today" reveal** — this is a mount-triggered entrance
+  (`StaggerGroup`/`StaggerItem`), not a scroll reveal — the
+  recommendation is the first thing the user sees on opening the app.
 
 ## Reference (read on demand)
 
