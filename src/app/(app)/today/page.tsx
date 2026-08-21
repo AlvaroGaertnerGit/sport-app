@@ -1,4 +1,5 @@
 import { getCurrentProfile, requireUser } from "@/lib/auth/dal";
+import { EYEBROW_CLASSNAME } from "@/components/ui/typography";
 import { getRoutineExerciseCount, getTodayRecommendation } from "@/lib/domain";
 
 import { TodayRecommendationCard } from "./recommendation-card";
@@ -25,11 +26,11 @@ export default async function TodayPage() {
   const greeting = profile?.display_name ? `Hola, ${profile.display_name}` : "Hola";
 
   return (
-    <div className="flex flex-1 flex-col gap-8 px-4 pt-10">
-      <div className="flex flex-col gap-1">
-        <p className="text-sm text-muted-foreground">{greeting}</p>
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">¿Qué toca hoy?</h1>
+    <div className="flex flex-1 flex-col px-5 pt-8">
+      <div className={`flex items-center justify-between ${EYEBROW_CLASSNAME}`}>
+        <span>{greeting}</span>
       </div>
+      <p className={`mt-8 ${EYEBROW_CLASSNAME}`}>¿Qué toca hoy?</p>
 
       <TodayRecommendationCard recommendation={recommendation} exerciseCount={exerciseCount} />
     </div>

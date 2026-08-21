@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 
-import { Button } from "@/components/ui/button";
+import { Button, ButtonArrow } from "@/components/ui/button";
 
 import { startWorkoutAction, type StartWorkoutState } from "./actions";
 
@@ -12,10 +12,16 @@ export function StartWorkoutButton({ planItemId }: { planItemId: string }) {
   const [state, formAction, pending] = useActionState(startWorkoutAction, INITIAL_STATE);
 
   return (
-    <form action={formAction} className="flex flex-col gap-2">
+    <form action={formAction} className="flex w-full flex-col gap-2">
       <input type="hidden" name="planItemId" value={planItemId} />
       <Button type="submit" disabled={pending}>
-        {pending ? "Empezando…" : "Empezar entrenamiento"}
+        {pending ? (
+          "Empezando…"
+        ) : (
+          <>
+            Empezar entrenamiento <ButtonArrow />
+          </>
+        )}
       </Button>
       {state?.error && (
         <p role="alert" className="text-center text-sm text-destructive">

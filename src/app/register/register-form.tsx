@@ -3,67 +3,79 @@
 import Link from "next/link";
 import { useActionState } from "react";
 
+import { Button, ButtonArrow, TEXT_LINK_CLASSNAME } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { signUpAction, type AuthFormState } from "@/lib/auth/actions";
 
 const initialState: AuthFormState = undefined;
+const ERROR_ID = "register-form-error";
 
 export function RegisterForm() {
   const [state, formAction, pending] = useActionState(signUpAction, initialState);
+  const hasError = Boolean(state?.error);
 
   return (
-    <form action={formAction} className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1">
-        <label htmlFor="email" className="text-sm font-medium">
+    <form action={formAction} className="flex flex-col gap-7">
+      <div className="flex flex-col gap-2">
+        <label htmlFor="email" className="font-mono text-xs tracking-widest text-muted-foreground uppercase">
           Email
         </label>
-        <input
+        <Input
           id="email"
           name="email"
           type="email"
           required
           autoComplete="email"
-          className="rounded border border-zinc-300 px-3 py-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black dark:border-zinc-700"
+          aria-invalid={hasError}
+          aria-describedby={hasError ? ERROR_ID : undefined}
         />
       </div>
 
-      <div className="flex flex-col gap-1">
-        <label htmlFor="password" className="text-sm font-medium">
-          Password
+      <div className="flex flex-col gap-2">
+        <label htmlFor="password" className="font-mono text-xs tracking-widest text-muted-foreground uppercase">
+          Contraseña
         </label>
-        <input
+        <Input
           id="password"
           name="password"
           type="password"
           required
-          minLength={6}
+          minLength={8}
           autoComplete="new-password"
-          className="rounded border border-zinc-300 px-3 py-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black dark:border-zinc-700"
+          aria-invalid={hasError}
+          aria-describedby={hasError ? ERROR_ID : undefined}
         />
       </div>
 
       {state?.error && (
-        <p role="alert" className="text-sm text-red-600">
+        <p id={ERROR_ID} role="alert" className="text-sm text-destructive">
           {state.error}
         </p>
       )}
       {state?.message && (
-        <p role="status" className="text-sm text-green-700 dark:text-green-500">
+        // text-foreground, not the success accent: the message itself
+        // already says "creada" -- success doesn't need to lean on color,
+        // and the lime accent is reserved for status glyphs (checkmarks,
+        // the rest-ring), not body copy.
+        <p role="status" className="text-sm text-foreground">
           {state.message}
         </p>
       )}
 
-      <button
-        type="submit"
-        disabled={pending}
-        className="min-h-11 rounded bg-black px-4 py-2 text-white disabled:opacity-50 dark:bg-white dark:text-black"
-      >
-        {pending ? "Creating account…" : "Create account"}
-      </button>
+      <Button type="submit" disabled={pending} className="mt-2">
+        {pending ? (
+          "Creando cuenta…"
+        ) : (
+          <>
+            Crear cuenta <ButtonArrow />
+          </>
+        )}
+      </Button>
 
-      <p className="text-sm text-zinc-600 dark:text-zinc-400">
-        Already have an account?{" "}
-        <Link href="/login" className="underline">
-          Sign in
+      <p className="text-sm text-muted-foreground">
+        ¿Ya tienes cuenta?{" "}
+        <Link href="/login" className={TEXT_LINK_CLASSNAME}>
+          Inicia sesión
         </Link>
       </p>
     </form>

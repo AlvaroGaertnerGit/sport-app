@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { FOCUS_RING_CLASSNAME } from "@/components/ui/button";
 import { requireUser } from "@/lib/auth/dal";
 import { getWorkoutSession } from "@/lib/domain";
 
@@ -24,19 +25,25 @@ export default async function WorkoutSessionPage(props: PageProps<"/workout/[ses
   }
 
   if (session.status !== "in_progress") {
+    const isCompleted = session.status === "completed";
     return (
-      <div className="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center gap-3 px-4 text-center">
-        <h1 className="text-xl font-semibold text-foreground">
-          {session.status === "completed" ? "Entrenamiento completado" : "Entrenamiento abandonado"}
+      <main className="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center gap-4 px-5 text-center">
+        {isCompleted && (
+          <span aria-hidden="true" className="flex size-14 items-center justify-center rounded-full bg-success text-2xl font-bold text-success-foreground">
+            ✓
+          </span>
+        )}
+        <h1 className="text-2xl font-bold text-foreground">
+          {isCompleted ? "Entrenamiento completado" : "Entrenamiento abandonado"}
         </h1>
         <p className="text-sm text-muted-foreground">Esta sesión ya ha terminado.</p>
         <Link
           href="/today"
-          className="text-sm font-medium text-primary underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+          className={`mt-2 font-mono text-sm tracking-wide text-primary uppercase ${FOCUS_RING_CLASSNAME} focus-visible:outline-primary`}
         >
-          Volver a Hoy
+          Volver a Hoy →
         </Link>
-      </div>
+      </main>
     );
   }
 

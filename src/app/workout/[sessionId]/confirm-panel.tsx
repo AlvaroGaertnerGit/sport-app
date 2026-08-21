@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 
+import { cardClassName } from "@/components/ui/card";
+
 /**
  * The one confirm/cancel layout shared by the three places Workout asks
  * "are you sure?" (skip exercise, finish with pending work, abandon).
@@ -17,12 +19,8 @@ export function ConfirmPanel({
   confirmButton: ReactNode;
 }) {
   return (
-    <div
-      role="alert"
-      aria-live="polite"
-      className="flex animate-scale-in flex-col gap-3 rounded-2xl border border-border bg-card p-4"
-    >
-      <div className="text-sm text-foreground">{message}</div>
+    <div role="alert" aria-live="polite" className={cardClassName("flex animate-scale-in flex-col gap-4")}>
+      <div className="text-base text-foreground">{message}</div>
       <div className="flex gap-3">
         <div className="flex-1">{cancelButton}</div>
         <div className="flex-1">{confirmButton}</div>

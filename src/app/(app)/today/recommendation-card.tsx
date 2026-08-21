@@ -1,10 +1,11 @@
-import { Button, ButtonLink } from "@/components/ui/button";
+import { Button, ButtonArrow, ButtonLink } from "@/components/ui/button";
+import { DISPLAY_HEADING_CLASSNAME } from "@/components/ui/typography";
 import type { TodayRecommendation } from "@/lib/domain";
 
 import { StartWorkoutButton } from "./start-workout-button";
 
-const CARD_CLASSNAME =
-  "flex flex-col gap-4 rounded-3xl border border-border bg-card p-6 shadow-sm";
+/** The routine name is the whole point of this screen -- it must dominate, so it's the one place in the app scaling with clamp() rather than a fixed step. */
+const ROUTINE_NAME_STYLE = { fontSize: "clamp(2.75rem, 13vw, 5.5rem)" };
 
 type TodayRecommendationCardProps = {
   recommendation: TodayRecommendation;
@@ -15,7 +16,9 @@ type TodayRecommendationCardProps = {
 /**
  * Renders exactly the state the domain gave us — no business logic here.
  * `getTodayRecommendation()` already decided which of these five states
- * applies; this component only knows how to draw each one.
+ * applies; this component only knows how to draw each one. No card
+ * surface anywhere here on purpose — the routine name itself is the
+ * dominant element on the page (see docs/style-reference).
  */
 export function TodayRecommendationCard({
   recommendation,
@@ -24,34 +27,44 @@ export function TodayRecommendationCard({
   switch (recommendation.type) {
     case "in_progress":
       return (
-        <section aria-labelledby="today-state-heading" className={CARD_CLASSNAME}>
-          <p className="text-sm font-medium text-muted-foreground">
-            Tienes un entrenamiento en curso
-          </p>
-          <h2
+        <section
+          aria-labelledby="today-state-heading"
+          className="mt-10 flex animate-fade-in flex-col items-start gap-8"
+        >
+          {/* Not EYEBROW_CLASSNAME -- this needs text-primary instead of
+              its baked-in text-muted-foreground, and Tailwind utility
+              order in the generated stylesheet isn't guaranteed to let a
+              later class in the string win over an earlier one. */}
+          <p className="font-mono text-xs tracking-widest text-primary uppercase">Entrenamiento en curso</p>
+          <h1
             id="today-state-heading"
-            className="text-2xl font-semibold uppercase tracking-wide text-foreground"
+            className={DISPLAY_HEADING_CLASSNAME}
+            style={ROUTINE_NAME_STYLE}
           >
             {recommendation.routineName ?? "Entrenamiento libre"}
-          </h2>
-          <ButtonLink href={`/workout/${recommendation.sessionId}`}>
-            Reanudar entrenamiento
+          </h1>
+          <ButtonLink href={`/workout/${recommendation.sessionId}`} className="mt-2">
+            Reanudar entrenamiento <ButtonArrow />
           </ButtonLink>
         </section>
       );
 
     case "ready":
       return (
-        <section aria-labelledby="today-state-heading" className={CARD_CLASSNAME}>
-          <h2
+        <section
+          aria-labelledby="today-state-heading"
+          className="mt-10 flex animate-fade-in flex-col items-start gap-8"
+        >
+          <h1
             id="today-state-heading"
-            className="text-2xl font-semibold uppercase tracking-wide text-foreground"
+            className={DISPLAY_HEADING_CLASSNAME}
+            style={ROUTINE_NAME_STYLE}
           >
             {recommendation.routineName}
-          </h2>
+          </h1>
           {exerciseCount !== null && (
-            <p className="text-sm text-muted-foreground">
-              {exerciseCount === 1 ? "1 ejercicio" : `${exerciseCount} ejercicios`}
+            <p className="font-mono text-sm tracking-wide text-muted-foreground tabular-nums uppercase">
+              {String(exerciseCount).padStart(2, "0")} {exerciseCount === 1 ? "ejercicio" : "ejercicios"}
             </p>
           )}
           <StartWorkoutButton planItemId={recommendation.planItemId} />
@@ -60,22 +73,18 @@ export function TodayRecommendationCard({
 
     case "empty_plan":
       return (
-        <section className={CARD_CLASSNAME}>
-          <h2 className="text-xl font-semibold text-foreground">Tu plan está vacío</h2>
-          <p className="text-sm text-muted-foreground">
-            Añade una rutina para empezar a entrenar.
-          </p>
+        <section className="mt-10 flex animate-fade-in flex-col gap-3">
+          <h2 className="text-2xl font-bold text-foreground">Tu plan está vacío</h2>
+          <p className="text-sm text-muted-foreground">Añade una rutina para empezar a entrenar.</p>
         </section>
       );
 
     case "no_plan":
       return (
-        <section className={CARD_CLASSNAME}>
-          <div className="flex flex-col gap-2">
-            <h2 className="text-xl font-semibold text-foreground">Todavía no tienes un plan</h2>
-            <p className="text-sm text-muted-foreground">
-              Crea un plan de entrenamiento para empezar.
-            </p>
+        <section className="mt-10 flex animate-fade-in flex-col gap-8">
+          <div className="flex flex-col gap-3">
+            <h2 className="text-2xl font-bold text-foreground">Todavía no tienes un plan</h2>
+            <p className="text-sm text-muted-foreground">Crea un plan de entrenamiento para empezar.</p>
           </div>
           <div className="flex flex-col gap-2">
             <Button disabled>Crear plan</Button>
@@ -86,13 +95,8 @@ export function TodayRecommendationCard({
 
     case "error":
       return (
-        <section
-          role="alert"
-          className={`${CARD_CLASSNAME} border-destructive/30`}
-        >
-          <h2 className="text-xl font-semibold text-foreground">
-            No hemos podido cargar tu entrenamiento
-          </h2>
+        <section role="alert" className="mt-10 flex animate-fade-in flex-col gap-3 border-l-2 border-destructive pl-4">
+          <h2 className="text-2xl font-bold text-foreground">No hemos podido cargar tu entrenamiento</h2>
           <p className="text-sm text-muted-foreground">Inténtalo de nuevo en unos minutos.</p>
         </section>
       );

@@ -5,8 +5,7 @@ import { BottomNav } from "@/components/app-shell/bottom-nav";
 /**
  * Shell for the authenticated app screens (Today, and later Plan/Historial/
  * Coach) — main content column + bottom nav. A route group, so it adds no
- * segment to the URL. src/app/dashboard is a separate pre-existing
- * placeholder route and intentionally not part of this shell.
+ * segment to the URL.
  */
 export default function AppLayout({ children }: { children: ReactNode }) {
   return (

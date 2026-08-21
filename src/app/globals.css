@@ -1,17 +1,43 @@
 @import "tailwindcss";
 
+/*
+ * RAW PERFORMANCE — see docs/style-reference/image.png (the phase's design
+ * reference) and docs/fase-8-direccion-artistica.md (the direction this
+ * palette formalizes into tokens). Values are the literal hex from the
+ * brief's "paleta definitiva", with two deliberate, minimal adjustments for
+ * WCAG AA (documented inline) -- never a hue change, only what contrast
+ * required.
+ */
 :root {
-  --background: oklch(0.985 0.002 90);
-  --foreground: oklch(0.18 0.01 260);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.18 0.01 260);
-  --border: oklch(0.9 0.005 260);
-  --muted: oklch(0.95 0.003 260);
-  --muted-foreground: oklch(0.48 0.01 260);
-  --primary: oklch(0.55 0.14 149);
-  --primary-foreground: oklch(0.99 0 0);
-  --destructive: oklch(0.55 0.2 25);
-  --destructive-foreground: oklch(0.99 0 0);
+  /* Light: not a mechanical inversion of dark -- a warm "chalk/concrete"
+     base, per the brief's own light-mode spec. */
+  --background: #f1eee7;
+  --foreground: #161616;
+  --card: #ffffff;
+  --card-foreground: #161616;
+  --elevated: #fbfaf6;
+  --elevated-foreground: #161616;
+  --border: #e4e0d6;
+  --muted: #ece8df;
+  /* #76736D given in the brief measures 4.08:1 on this background (fails
+     AA's 4.5:1 for normal text) -- darkened minimally to #6E6B65 (4.58:1). */
+  --muted-foreground: #6e6b65;
+  /* #FF3045 given in the brief only reaches 3.65:1 with white text, and the
+     brief's own light-mode accent (#D92F3F) still falls short (4.09:1) once
+     used as small text directly on --background (e.g. the "Abandonar"
+     trigger). Deepened minimally to #C42636 -- same red, 4.93-5.71:1 in
+     every real usage (button fill, small text on bg, small text on card). */
+  --primary: #c42636;
+  --primary-foreground: #ffffff;
+  --destructive: #c42636;
+  --destructive-foreground: #ffffff;
+  /* Raw lime is close to unreadable as text/icon on a light ground
+     (1.16:1) -- deepened to an olive-green. #5C7A0A cleared white/card
+     (4.95:1) but fell short as small text directly on --background
+     (4.27:1, e.g. a set-row checkmark now that cards are gone); deepened
+     once more to #517008 (4.94:1 on --background). */
+  --success: #517008;
+  --success-foreground: #ffffff;
 }
 
 @theme inline {
@@ -19,6 +45,8 @@
   --color-foreground: var(--foreground);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
+  --color-elevated: var(--elevated);
+  --color-elevated-foreground: var(--elevated-foreground);
   --color-border: var(--border);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
@@ -26,21 +54,20 @@
   --color-primary-foreground: var(--primary-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 
   /*
    * Motion tokens: no framer-motion in this project (deliberate -- see
    * the `motion` skill's own note that it isn't installed here, and this
-   * app's established no-new-dependency precedent). These few
-   * transform/opacity-only keyframes cover everything Workout v2 needs
-   * (phase transitions, a completed-set pop, a confirmation entrance).
-   * Centralized here instead of inline per component so there's one
-   * motion language, same intent as the skill's token files.
+   * app's established no-new-dependency precedent).
    */
   --animate-fade-in: fade-in 200ms ease-out;
   --animate-scale-in: scale-in 200ms ease-out;
   --animate-check-pop: check-pop 320ms ease-out;
+  --animate-pulse-once: pulse-once 200ms ease-out;
 }
 
 @keyframes fade-in {
@@ -78,11 +105,22 @@
   }
 }
 
+/* Rest-complete pulse: one clear beat, never a loop -- see use-rest-timer.ts's phase transition. */
+@keyframes pulse-once {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.08);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
 /*
  * Global reduced-motion safety net: every animation/transition on the
- * page collapses to effectively instant. This is the "don't hand-roll
- * useReducedMotion() per component" guarantee the `motion` skill asks
- * for, done in plain CSS since there's no MotionProvider here.
+ * page collapses to effectively instant.
  */
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -97,24 +135,31 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: oklch(0.16 0.006 260);
-    --foreground: oklch(0.96 0.003 260);
-    --card: oklch(0.21 0.007 260);
-    --card-foreground: oklch(0.96 0.003 260);
-    --border: oklch(0.3 0.01 260);
-    --muted: oklch(0.26 0.008 260);
-    --muted-foreground: oklch(0.65 0.01 260);
-    --primary: oklch(0.58 0.15 149);
-    --primary-foreground: oklch(0.99 0 0);
-    --destructive: oklch(0.62 0.19 25);
-    --destructive-foreground: oklch(0.99 0 0);
+    /* Dark: the default RAW PERFORMANCE identity -- a warm-graphite
+       instrument surface, not a blue-tinted default dark mode. */
+    --background: #080808;
+    --foreground: #f4f3ee;
+    --card: #141414;
+    --card-foreground: #f4f3ee;
+    --elevated: #191919;
+    --elevated-foreground: #f4f3ee;
+    --border: #292929;
+    --muted: #1c1c1c;
+    /* #777777 given in the brief measures 4.47:1 on #080808 and 4.11:1 on
+       #141414 (both fail AA 4.5:1) -- lightened minimally to #8A8A8A
+       (5.80:1 / 5.34:1). */
+    --muted-foreground: #8a8a8a;
+    --primary: #ff3045;
+    --primary-foreground: #ffffff;
+    --destructive: #ff3045;
+    --destructive-foreground: #ffffff;
+    --success: #d4ff3f;
+    --success-foreground: #080808;
   }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  /* Geist, self-hosted via next/font (layout.tsx) -- was hardcoded to
-     Arial here, silently overriding it on every page. */
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
 }

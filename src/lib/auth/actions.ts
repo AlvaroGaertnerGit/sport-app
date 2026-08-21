@@ -43,16 +43,16 @@ function mapAuthError(error: unknown): string {
 
   switch (code) {
     case "invalid_credentials":
-      return "Incorrect email or password.";
+      return "Email o contraseña incorrectos.";
     case "user_already_exists":
-      return "An account with this email already exists.";
+      return "Ya existe una cuenta con este email.";
     case "weak_password":
-      return "Password is too weak — use at least 8 characters, mixing letters and numbers.";
+      return "La contraseña es demasiado débil — usa al menos 8 caracteres, combinando letras y números.";
     case "email_not_confirmed":
-      return "Please confirm your email before signing in.";
+      return "Confirma tu email antes de iniciar sesión.";
     case "over_email_send_rate_limit":
     case "over_request_rate_limit":
-      return "Too many attempts. Please wait a moment and try again.";
+      return "Demasiados intentos. Espera un momento e inténtalo de nuevo.";
     default:
       break;
   }
@@ -60,10 +60,10 @@ function mapAuthError(error: unknown): string {
   // No `code` at all (thrown, not returned by the SDK) almost always means
   // the request never reached Supabase -- a network/fetch failure.
   if (error instanceof TypeError || (error instanceof Error && !code)) {
-    return "Network error. Check your connection and try again.";
+    return "Error de red. Comprueba tu conexión e inténtalo de nuevo.";
   }
 
-  return "Something went wrong. Please try again.";
+  return "Algo ha salido mal. Inténtalo de nuevo.";
 }
 
 export async function signUpAction(
@@ -74,7 +74,7 @@ export async function signUpAction(
   const password = String(formData.get("password") ?? "");
 
   if (!email || !password) {
-    return { error: "Email and password are required." };
+    return { error: "Email y contraseña son obligatorios." };
   }
 
   const supabase = await createClient();
@@ -91,7 +91,7 @@ export async function signUpAction(
     // an obfuscated user (empty `identities`), not an error -- verified
     // against Supabase's Identity Linking docs before relying on it here.
     if (data.user && data.user.identities && data.user.identities.length === 0) {
-      return { error: "An account with this email already exists." };
+      return { error: "Ya existe una cuenta con este email." };
     }
 
     if (data.session) {
@@ -101,7 +101,7 @@ export async function signUpAction(
     }
 
     return {
-      message: "Account created. Check your email to confirm your account before signing in.",
+      message: "Cuenta creada. Revisa tu email para confirmarla antes de iniciar sesión.",
     };
   } catch (thrown) {
     return { error: mapAuthError(thrown) };
@@ -117,7 +117,7 @@ export async function signInAction(
   const redirectTo = safeRedirectTarget(String(formData.get("redirectTo") ?? "/today"));
 
   if (!email || !password) {
-    return { error: "Email and password are required." };
+    return { error: "Email y contraseña son obligatorios." };
   }
 
   const supabase = await createClient();

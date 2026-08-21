@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useActionState, useEffect, useRef, useState } from "react";
 
-import { Button } from "@/components/ui/button";
+import { Button, ButtonArrow, FOCUS_RING_CLASSNAME } from "@/components/ui/button";
 import { isExerciseSetsDone } from "@/lib/domain/exercise-progress";
 import type { WorkoutSessionDetail } from "@/lib/domain";
 
@@ -122,16 +122,16 @@ export function WorkoutSessionView({ session }: { session: WorkoutSessionDetail 
   });
 
   return (
-    <div className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 px-4 pt-6 pb-10">
-      <div className="flex flex-col gap-2">
-        <div className="flex items-center justify-between">
+    <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-2 px-5 pt-6 pb-10">
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-between font-mono text-xs tracking-wide uppercase">
           <Link
             href="/today"
-            className="inline-flex min-h-11 items-center text-sm font-medium text-muted-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+            className={`inline-flex min-h-11 items-center text-muted-foreground ${FOCUS_RING_CLASSNAME} focus-visible:outline-primary`}
           >
             ← Salir
           </Link>
-          <p className="text-sm font-medium text-muted-foreground">
+          <p className="text-muted-foreground tabular-nums">
             {session.routineName ?? "Entrenamiento"}
             {exercises.length > 0 && ` · ${viewIndex + 1}/${exercises.length}`}
           </p>
@@ -175,6 +175,11 @@ export function WorkoutSessionView({ session }: { session: WorkoutSessionDetail 
                   </Button>
                 }
                 confirmButton={
+                  // No arrow here -- ConfirmPanel splits this button into a
+                  // half-width flex-1 slot next to "Cancelar"; the primary
+                  // variant's large AA-driven text (see button.tsx) already
+                  // fills that space, an appended glyph risks wrapping on
+                  // narrow phones.
                   <Button
                     type="button"
                     onClick={() => {
@@ -187,7 +192,7 @@ export function WorkoutSessionView({ session }: { session: WorkoutSessionDetail 
                 }
               />
             ) : (
-              <div className="flex gap-3">
+              <div className="mt-2 flex gap-3">
                 <Button
                   type="button"
                   variant="ghost"
@@ -208,13 +213,13 @@ export function WorkoutSessionView({ session }: { session: WorkoutSessionDetail 
             ))}
         </>
       ) : (
-        <section className="flex flex-col gap-2 rounded-3xl border border-border bg-card p-6 shadow-sm">
-          <h1 className="text-xl font-semibold text-foreground">Esta rutina no tiene ejercicios</h1>
+        <section className="mt-10 flex flex-col gap-2 text-center">
+          <h1 className="text-xl font-bold text-foreground">Esta rutina no tiene ejercicios</h1>
           <p className="text-sm text-muted-foreground">Puedes finalizar el entrenamiento.</p>
         </section>
       )}
 
-      <div className="flex flex-col gap-2">
+      <div className="mt-8 flex flex-col gap-3">
         {confirming === "finish" ? (
           <ConfirmPanel
             message={
@@ -250,7 +255,13 @@ export function WorkoutSessionView({ session }: { session: WorkoutSessionDetail 
           >
             <input type="hidden" name="sessionId" value={session.sessionId} />
             <Button type="submit" disabled={completePending || abandonPending || confirming === "abandon"}>
-              {completePending ? "Finalizando…" : "Finalizar entrenamiento"}
+              {completePending ? (
+                "Finalizando…"
+              ) : (
+                <>
+                  Finalizar entrenamiento <ButtonArrow />
+                </>
+              )}
             </Button>
           </form>
         )}
@@ -290,7 +301,7 @@ export function WorkoutSessionView({ session }: { session: WorkoutSessionDetail 
             type="button"
             onClick={() => setConfirming("abandon")}
             disabled={completePending}
-            className="inline-flex min-h-11 items-center justify-center text-center text-xs font-medium text-muted-foreground underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:text-muted-foreground/50"
+            className={`inline-flex min-h-11 items-center justify-center text-center font-mono text-xs tracking-wide text-muted-foreground uppercase hover:text-destructive ${FOCUS_RING_CLASSNAME} focus-visible:outline-primary disabled:text-muted-foreground/50`}
           >
             Abandonar entrenamiento
           </button>
@@ -301,6 +312,6 @@ export function WorkoutSessionView({ session }: { session: WorkoutSessionDetail 
           </p>
         )}
       </div>
-    </div>
+    </main>
   );
 }

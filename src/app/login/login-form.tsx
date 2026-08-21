@@ -3,64 +3,72 @@
 import Link from "next/link";
 import { useActionState } from "react";
 
+import { Button, ButtonArrow, TEXT_LINK_CLASSNAME } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { signInAction, type AuthFormState } from "@/lib/auth/actions";
 
 const initialState: AuthFormState = undefined;
+const ERROR_ID = "login-form-error";
 
 export function LoginForm({ redirectTo }: { redirectTo: string }) {
   const [state, formAction, pending] = useActionState(signInAction, initialState);
+  const hasError = Boolean(state?.error);
 
   return (
-    <form action={formAction} className="flex flex-col gap-4">
+    <form action={formAction} className="flex flex-col gap-7">
       <input type="hidden" name="redirectTo" value={redirectTo} />
 
-      <div className="flex flex-col gap-1">
-        <label htmlFor="email" className="text-sm font-medium">
+      <div className="flex flex-col gap-2">
+        <label htmlFor="email" className="font-mono text-xs tracking-widest text-muted-foreground uppercase">
           Email
         </label>
-        <input
+        <Input
           id="email"
           name="email"
           type="email"
           required
           autoComplete="email"
-          className="rounded border border-zinc-300 px-3 py-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black dark:border-zinc-700"
+          aria-invalid={hasError}
+          aria-describedby={hasError ? ERROR_ID : undefined}
         />
       </div>
 
-      <div className="flex flex-col gap-1">
-        <label htmlFor="password" className="text-sm font-medium">
-          Password
+      <div className="flex flex-col gap-2">
+        <label htmlFor="password" className="font-mono text-xs tracking-widest text-muted-foreground uppercase">
+          Contraseña
         </label>
-        <input
+        <Input
           id="password"
           name="password"
           type="password"
           required
           minLength={6}
           autoComplete="current-password"
-          className="rounded border border-zinc-300 px-3 py-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black dark:border-zinc-700"
+          aria-invalid={hasError}
+          aria-describedby={hasError ? ERROR_ID : undefined}
         />
       </div>
 
       {state?.error && (
-        <p role="alert" className="text-sm text-red-600">
+        <p id={ERROR_ID} role="alert" className="text-sm text-destructive">
           {state.error}
         </p>
       )}
 
-      <button
-        type="submit"
-        disabled={pending}
-        className="min-h-11 rounded bg-black px-4 py-2 text-white disabled:opacity-50 dark:bg-white dark:text-black"
-      >
-        {pending ? "Signing in…" : "Sign in"}
-      </button>
+      <Button type="submit" disabled={pending} className="mt-2">
+        {pending ? (
+          "Iniciando sesión…"
+        ) : (
+          <>
+            Iniciar sesión <ButtonArrow />
+          </>
+        )}
+      </Button>
 
-      <p className="text-sm text-zinc-600 dark:text-zinc-400">
-        No account?{" "}
-        <Link href="/register" className="underline">
-          Register
+      <p className="text-sm text-muted-foreground">
+        ¿No tienes cuenta?{" "}
+        <Link href="/register" className={TEXT_LINK_CLASSNAME}>
+          Regístrate
         </Link>
       </p>
     </form>

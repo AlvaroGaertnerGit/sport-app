@@ -1,21 +1,28 @@
 type SegmentState = "done" | "current" | "pending";
 
+/**
+ * A completed exercise is a "success" state (lime), not "action/intensity"
+ * (red) -- the current position is neutral, just "you are here". Done also
+ * renders visibly thicker than pending/current -- height, not just color,
+ * carries "done" (CLAUDE.md §11: el color nunca es la única señal).
+ */
 const SEGMENT_CLASSNAME: Record<SegmentState, string> = {
-  done: "bg-primary",
-  current: "bg-primary/40",
-  pending: "bg-muted",
+  done: "h-1 bg-success",
+  current: "h-0.5 bg-foreground",
+  pending: "h-0.5 bg-border",
 };
 
 /**
- * Discrete visual companion to the "2 / 5" text next to it — not a
- * dashboard, just a glance-able strip. Decorative (the text already
- * carries the count accessibly), so this stays out of the a11y tree.
+ * Discrete visual companion to the "2 / 5" text next to it — a thin line,
+ * not a chunky rounded bar (see docs/style-reference). Decorative (the
+ * text already carries the count accessibly), so this stays out of the
+ * a11y tree.
  */
 export function ProgressBar({ segments }: { segments: readonly SegmentState[] }) {
   return (
-    <div aria-hidden="true" className="flex gap-1">
+    <div aria-hidden="true" className="flex items-end gap-1">
       {segments.map((state, i) => (
-        <span key={i} className={`h-1.5 flex-1 rounded-full transition-colors ${SEGMENT_CLASSNAME[state]}`} />
+        <span key={i} className={`flex-1 transition-colors ${SEGMENT_CLASSNAME[state]}`} />
       ))}
     </div>
   );
