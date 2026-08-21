@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useActionState, useEffect, useRef, useState } from "react";
 
 import { Button, ButtonArrow, FOCUS_RING_CLASSNAME } from "@/components/ui/button";
+import { ErrorText } from "@/components/ui/error-text";
 import { isExerciseSetsDone } from "@/lib/domain/exercise-progress";
 import type { WorkoutSessionDetail } from "@/lib/domain";
 
@@ -127,7 +128,7 @@ export function WorkoutSessionView({ session }: { session: WorkoutSessionDetail 
         <div className="flex items-center justify-between font-mono text-xs tracking-wide uppercase">
           <Link
             href="/today"
-            className={`inline-flex min-h-11 items-center text-muted-foreground ${FOCUS_RING_CLASSNAME} focus-visible:outline-primary`}
+            className={`inline-flex min-h-11 items-center text-muted-foreground transition-colors duration-150 hover:text-foreground active:scale-95 ${FOCUS_RING_CLASSNAME} focus-visible:outline-primary`}
           >
             ← Salir
           </Link>
@@ -160,6 +161,7 @@ export function WorkoutSessionView({ session }: { session: WorkoutSessionDetail 
           {showBrowseNav &&
             (confirming === "skip" ? (
               <ConfirmPanel
+                onCancel={() => setConfirming(null)}
                 message={
                   <>
                     <p className="font-medium">
@@ -222,6 +224,7 @@ export function WorkoutSessionView({ session }: { session: WorkoutSessionDetail 
       <div className="mt-8 flex flex-col gap-3">
         {confirming === "finish" ? (
           <ConfirmPanel
+            onCancel={() => setConfirming(null)}
             message={
               <>
                 <p className="font-medium">Te quedan ejercicios o series pendientes.</p>
@@ -254,7 +257,16 @@ export function WorkoutSessionView({ session }: { session: WorkoutSessionDetail 
             }}
           >
             <input type="hidden" name="sessionId" value={session.sessionId} />
-            <Button type="submit" disabled={completePending || abandonPending || confirming === "abandon"}>
+            {/* Ghost until every exercise is done -- otherwise this sits solid-red
+                right under the real primary CTA (Registrar serie / Siguiente
+                ejercicio), which is exactly the "two primary buttons at once"
+                the design direction rules out. Same condition ExercisePanel
+                already uses for "Continuar" vs "Siguiente ejercicio". */}
+            <Button
+              type="submit"
+              variant={readyToFinish ? "primary" : "ghost"}
+              disabled={completePending || abandonPending || confirming === "abandon"}
+            >
               {completePending ? (
                 "Finalizando…"
               ) : (
@@ -265,14 +277,11 @@ export function WorkoutSessionView({ session }: { session: WorkoutSessionDetail 
             </Button>
           </form>
         )}
-        {completeState?.error && (
-          <p role="alert" className="text-center text-sm text-destructive">
-            {completeState.error}
-          </p>
-        )}
+        {completeState?.error && <ErrorText center>{completeState.error}</ErrorText>}
 
         {confirming === "abandon" ? (
           <ConfirmPanel
+            onCancel={() => setConfirming(null)}
             message={
               <>
                 <p className="font-medium">¿Abandonar entrenamiento?</p>
@@ -301,16 +310,12 @@ export function WorkoutSessionView({ session }: { session: WorkoutSessionDetail 
             type="button"
             onClick={() => setConfirming("abandon")}
             disabled={completePending}
-            className={`inline-flex min-h-11 items-center justify-center text-center font-mono text-xs tracking-wide text-muted-foreground uppercase hover:text-destructive ${FOCUS_RING_CLASSNAME} focus-visible:outline-primary disabled:text-muted-foreground/50`}
+            className={`inline-flex min-h-11 items-center justify-center text-center font-mono text-xs tracking-wide text-muted-foreground uppercase transition duration-150 hover:text-destructive active:scale-95 disabled:active:scale-100 ${FOCUS_RING_CLASSNAME} focus-visible:outline-primary disabled:text-muted-foreground/50`}
           >
             Abandonar entrenamiento
           </button>
         )}
-        {abandonState?.error && (
-          <p role="alert" className="text-center text-sm text-destructive">
-            {abandonState.error}
-          </p>
-        )}
+        {abandonState?.error && <ErrorText center>{abandonState.error}</ErrorText>}
       </div>
     </main>
   );

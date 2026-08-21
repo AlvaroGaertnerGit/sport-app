@@ -70,12 +70,17 @@
   --animate-pulse-once: pulse-once 200ms ease-out;
 }
 
+/* Content should arrive, not just appear -- the brief's Today-entrance spec
+   (opacity + translateY(6px)) applied once, shared by every animate-fade-in
+   use (Today's states, Workout's phase transitions, Auth's error lines). */
 @keyframes fade-in {
   from {
     opacity: 0;
+    transform: translateY(6px);
   }
   to {
     opacity: 1;
+    transform: translateY(0);
   }
 }
 

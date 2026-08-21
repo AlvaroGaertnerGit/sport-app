@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useActionState } from "react";
 
 import { Button, ButtonArrow, TEXT_LINK_CLASSNAME } from "@/components/ui/button";
+import { ErrorText } from "@/components/ui/error-text";
 import { Input } from "@/components/ui/input";
 import { signUpAction, type AuthFormState } from "@/lib/auth/actions";
 
@@ -47,11 +48,7 @@ export function RegisterForm() {
         />
       </div>
 
-      {state?.error && (
-        <p id={ERROR_ID} role="alert" className="text-sm text-destructive">
-          {state.error}
-        </p>
-      )}
+      {state?.error && <ErrorText id={ERROR_ID}>{state.error}</ErrorText>}
       {state?.message && (
         // text-foreground, not the success accent: the message itself
         // already says "creada" -- success doesn't need to lean on color,

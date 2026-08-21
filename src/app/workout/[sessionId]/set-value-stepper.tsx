@@ -25,13 +25,23 @@ type SetValueStepperProps = {
  */
 export function SetValueStepper({ label, defaultValue, step = 1, compact = false }: SetValueStepperProps) {
   const [value, setValue] = useState(defaultValue);
+  // Bumped only by the +/- buttons (never by typing) -- remounting just
+  // this row restarts the CSS animation below so each tap reads as a
+  // distinct event, per the brief's "el número puede tener un pequeño
+  // scale" ask, without interrupting a user who's mid-typing a value.
+  const [pulse, setPulse] = useState(0);
   const inputId = useId();
 
   function clamp(next: number) {
     return Math.max(0, Math.round(next));
   }
 
-  const buttonClassName = `flex size-11 shrink-0 items-center justify-center rounded-md border border-border font-mono text-lg text-foreground transition-colors hover:border-primary hover:text-primary ${FOCUS_RING_CLASSNAME} focus-visible:outline-primary`;
+  function step_(delta: number) {
+    setValue((v) => clamp(v + delta));
+    setPulse((p) => p + 1);
+  }
+
+  const buttonClassName = `flex size-11 shrink-0 items-center justify-center rounded-md border border-border font-mono text-lg text-foreground transition duration-150 hover:border-primary hover:text-primary active:scale-90 ${FOCUS_RING_CLASSNAME} focus-visible:outline-primary`;
 
   return (
     <div className={compact ? "flex flex-col items-end gap-1.5" : "flex flex-col gap-2"}>
@@ -44,30 +54,31 @@ export function SetValueStepper({ label, defaultValue, step = 1, compact = false
         <button
           type="button"
           aria-label={compact ? `Disminuir, ${label}` : "Disminuir"}
-          onClick={() => setValue((v) => clamp(v - step))}
+          onClick={() => step_(-step)}
           className={buttonClassName}
         >
           −
         </button>
         <input
+          key={pulse}
           id={inputId}
           name="value"
           type="text"
           inputMode="numeric"
           pattern="[0-9]*"
           aria-label={compact ? label : undefined}
-          value={value}
+          defaultValue={value}
           onChange={(event) => {
             const digits = event.target.value.replace(/[^0-9]/g, "");
             setValue(digits === "" ? 0 : clamp(Number(digits)));
           }}
           required
-          className={`min-h-11 rounded-md border border-border bg-transparent text-center font-mono text-xl font-bold text-foreground tabular-nums ${FOCUS_RING_CLASSNAME} focus-visible:outline-primary ${compact ? "w-16" : "w-full min-w-0 flex-1"}`}
+          className={`min-h-11 animate-pulse-once rounded-md border border-border bg-transparent text-center font-mono text-xl font-bold text-foreground tabular-nums ${FOCUS_RING_CLASSNAME} focus-visible:outline-primary ${compact ? "w-16" : "w-full min-w-0 flex-1"}`}
         />
         <button
           type="button"
           aria-label={compact ? `Aumentar, ${label}` : "Aumentar"}
-          onClick={() => setValue((v) => clamp(v + step))}
+          onClick={() => step_(step)}
           className={buttonClassName}
         >
           +

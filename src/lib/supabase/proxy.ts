@@ -13,8 +13,9 @@ import type { Database } from "@/types/database";
 const PROTECTED_ROUTE_PREFIXES = [
   "/today",
   "/workout",
+  "/history",
+  "/plan",
   "/routines",
-  "/plans",
   "/profile",
 ] as const;
 

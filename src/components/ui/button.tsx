@@ -6,10 +6,23 @@ export const FOCUS_RING_CLASSNAME =
   "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2";
 
 /** Underlined inline text link (Auth's "¿No tienes cuenta? Regístrate" pattern) — not a Button variant, it sits inside a sentence rather than standing alone. */
-export const TEXT_LINK_CLASSNAME = `font-medium text-foreground underline underline-offset-2 ${FOCUS_RING_CLASSNAME} focus-visible:outline-primary`;
+export const TEXT_LINK_CLASSNAME = `font-medium text-foreground underline underline-offset-2 transition-colors duration-150 hover:text-primary ${FOCUS_RING_CLASSNAME} focus-visible:outline-primary`;
 
-/** Rectangular, not pill -- "evitar botones excesivamente redondeados" per the brief. Text size/weight live per-variant below, not here: only a solid fill needs the large-text AA allowance (see `primary`). */
-const BASE_CLASSNAME = `inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-md px-6 transition-colors ${FOCUS_RING_CLASSNAME} disabled:cursor-not-allowed`;
+/**
+ * Rectangular, not pill -- "evitar botones excesivamente redondeados" per the brief. Text size/weight live per-variant below, not here: only a solid fill needs the large-text AA allowance (see `primary`).
+ *
+ * `transition` (not `transition-colors`) -- Tailwind's `transition-*`
+ * utilities each set their own `transition-property`, so stacking
+ * `transition-colors` with a separate `transition-transform` would have
+ * the later one silently win instead of merging. The unsuffixed utility's
+ * default property list covers color/background/border *and* transform in
+ * one declaration, which is what `active:scale-*` below needs.
+ * `active:scale-[0.98]` is the one shared press/pressed feedback for every
+ * button in the app -- physical but never bouncy, disabled below so a
+ * disabled/pending button doesn't visually "press" on a click that does
+ * nothing.
+ */
+const BASE_CLASSNAME = `inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-md px-6 transition duration-150 active:scale-[0.98] disabled:active:scale-100 ${FOCUS_RING_CLASSNAME} disabled:cursor-not-allowed`;
 
 const VARIANT_CLASSNAME = {
   /**

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useActionState } from "react";
 
 import { Button, ButtonArrow, TEXT_LINK_CLASSNAME } from "@/components/ui/button";
+import { ErrorText } from "@/components/ui/error-text";
 import { Input } from "@/components/ui/input";
 import { signInAction, type AuthFormState } from "@/lib/auth/actions";
 
@@ -49,11 +50,7 @@ export function LoginForm({ redirectTo }: { redirectTo: string }) {
         />
       </div>
 
-      {state?.error && (
-        <p id={ERROR_ID} role="alert" className="text-sm text-destructive">
-          {state.error}
-        </p>
-      )}
+      {state?.error && <ErrorText id={ERROR_ID}>{state.error}</ErrorText>}
 
       <Button type="submit" disabled={pending} className="mt-2">
         {pending ? (

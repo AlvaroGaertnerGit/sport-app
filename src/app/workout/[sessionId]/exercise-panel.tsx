@@ -1,9 +1,12 @@
 import Image from "next/image";
+import { useState } from "react";
 
 import { Button, ButtonArrow, FOCUS_RING_CLASSNAME } from "@/components/ui/button";
 import { CheckBadge } from "@/components/ui/check-badge";
+import { ErrorText } from "@/components/ui/error-text";
 import { DISPLAY_HEADING_CLASSNAME, EYEBROW_CLASSNAME } from "@/components/ui/typography";
 import { formatRestClock } from "@/lib/rest-timer";
+import { formatExerciseTarget as formatTarget } from "@/lib/domain/exercise-progress";
 import type { WorkoutSessionExercise } from "@/lib/domain";
 
 import type { LogSetActionState } from "./actions";
@@ -18,17 +21,6 @@ export type ExercisePanelPhase =
   | "resting"
   | "rest-done-continue"
   | "rest-done-exercise";
-
-function formatTarget(exercise: WorkoutSessionExercise): string {
-  if (exercise.targetType === "duration") {
-    return exercise.targetDurationSeconds ? `${exercise.targetDurationSeconds}s` : "—";
-  }
-  const { targetRepsMin, targetRepsMax } = exercise;
-  if (targetRepsMin != null && targetRepsMax != null && targetRepsMin !== targetRepsMax) {
-    return `${targetRepsMin}–${targetRepsMax} reps`;
-  }
-  return `${targetRepsMax ?? targetRepsMin ?? "—"} reps`;
-}
 
 function defaultSetValue(exercise: WorkoutSessionExercise): number {
   if (exercise.targetType === "duration") {
@@ -151,7 +143,7 @@ function TechniqueDisclosure({ exercise }: { exercise: WorkoutSessionExercise })
   return (
     <details className="group border-t border-border pt-3">
       <summary
-        className={`flex min-h-11 cursor-pointer list-none items-center justify-between font-mono text-xs tracking-wide text-muted-foreground uppercase [&::-webkit-details-marker]:hidden ${FOCUS_RING_CLASSNAME} focus-visible:outline-primary`}
+        className={`flex min-h-11 cursor-pointer list-none items-center justify-between font-mono text-xs tracking-wide text-muted-foreground uppercase transition-colors duration-150 hover:text-foreground [&::-webkit-details-marker]:hidden ${FOCUS_RING_CLASSNAME} focus-visible:outline-primary`}
       >
         Ver técnica
         <span aria-hidden="true" className="transition-transform group-open:rotate-180">
@@ -202,11 +194,7 @@ function LoggingContent({
           <input type="hidden" name="sessionId" value={sessionId} />
           <input type="hidden" name="exerciseId" value={exercise.exerciseId} />
           <SetRows key={exercise.exerciseId} exercise={exercise} editable />
-          {logState?.error && (
-            <p role="alert" className="text-sm text-destructive">
-              {logState.error}
-            </p>
-          )}
+          {logState?.error && <ErrorText>{logState.error}</ErrorText>}
           <Button type="submit" disabled={logPending}>
             {logPending ? (
               "Guardando…"
@@ -264,23 +252,35 @@ function RestingBlock({
   onAddRest: () => void;
   onSkipRest: () => void;
 }) {
+  // "+30s" already updates the ring/digits via the totalSeconds prop --
+  // this only adds the *event* feedback the brief asks for (the user
+  // should feel the tap happened, not just read a new number). Bumping a
+  // key remounts the ring so `animate-pulse-once` restarts every press,
+  // without needing to track previous totalSeconds across renders.
+  const [pulseKey, setPulseKey] = useState(0);
+
   return (
     <div className="flex flex-col items-center gap-8 py-4 text-center">
       <p className={EYEBROW_CLASSNAME}>Descanso</p>
-      <RestRing remainingSeconds={remainingSeconds} totalSeconds={totalSeconds} />
+      <div key={pulseKey} className="animate-pulse-once">
+        <RestRing remainingSeconds={remainingSeconds} totalSeconds={totalSeconds} />
+      </div>
       <p className="font-mono text-xs tracking-wide text-muted-foreground uppercase">{nextSetLabel}</p>
       <div className="flex items-center gap-8">
         <button
           type="button"
-          onClick={onAddRest}
-          className={`min-h-11 px-2 font-mono text-sm tracking-wide text-muted-foreground uppercase hover:text-foreground ${FOCUS_RING_CLASSNAME} focus-visible:outline-primary`}
+          onClick={() => {
+            onAddRest();
+            setPulseKey((k) => k + 1);
+          }}
+          className={`min-h-11 px-2 font-mono text-sm tracking-wide text-muted-foreground uppercase transition duration-150 hover:text-foreground active:scale-95 ${FOCUS_RING_CLASSNAME} focus-visible:outline-primary`}
         >
           +30s
         </button>
         <button
           type="button"
           onClick={onSkipRest}
-          className={`min-h-11 px-2 font-mono text-sm tracking-wide text-muted-foreground uppercase hover:text-foreground ${FOCUS_RING_CLASSNAME} focus-visible:outline-primary`}
+          className={`min-h-11 px-2 font-mono text-sm tracking-wide text-muted-foreground uppercase transition duration-150 hover:text-foreground active:scale-95 ${FOCUS_RING_CLASSNAME} focus-visible:outline-primary`}
         >
           Saltar descanso →
         </button>
@@ -377,7 +377,11 @@ export function ExercisePanel({
   const nextSetLabel = `Siguiente: serie ${nextSetNumber}/${exercise.targetSets} · ${formatTarget(exercise)}`;
 
   return (
-    <div key={phase} className="flex animate-fade-in flex-col gap-6 pt-6">
+    // Keyed on exercise + phase, not phase alone -- browsing to a different
+    // exercise via "Anterior"/"Siguiente" while both stay in the "logging"
+    // phase (the common case) used to skip this remount entirely, so the
+    // panel just snapped to the new exercise with no transition at all.
+    <div key={`${exercise.exerciseId}-${phase}`} className="flex animate-fade-in flex-col gap-6 pt-6">
       {phase === "resting" && (
         <RestingBlock
           remainingSeconds={restRemainingSeconds}

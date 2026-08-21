@@ -1,7 +1,8 @@
-import { Button, ButtonArrow, ButtonLink } from "@/components/ui/button";
+import { ButtonArrow, ButtonLink } from "@/components/ui/button";
 import { DISPLAY_HEADING_CLASSNAME } from "@/components/ui/typography";
 import type { TodayRecommendation } from "@/lib/domain";
 
+import { EmptyPlanState, NoActivePlanState } from "../plan-empty-states";
 import { StartWorkoutButton } from "./start-workout-button";
 
 /** The routine name is the whole point of this screen -- it must dominate, so it's the one place in the app scaling with clamp() rather than a fixed step. */
@@ -72,26 +73,10 @@ export function TodayRecommendationCard({
       );
 
     case "empty_plan":
-      return (
-        <section className="mt-10 flex animate-fade-in flex-col gap-3">
-          <h2 className="text-2xl font-bold text-foreground">Tu plan está vacío</h2>
-          <p className="text-sm text-muted-foreground">Añade una rutina para empezar a entrenar.</p>
-        </section>
-      );
+      return <EmptyPlanState />;
 
     case "no_plan":
-      return (
-        <section className="mt-10 flex animate-fade-in flex-col gap-8">
-          <div className="flex flex-col gap-3">
-            <h2 className="text-2xl font-bold text-foreground">Todavía no tienes un plan</h2>
-            <p className="text-sm text-muted-foreground">Crea un plan de entrenamiento para empezar.</p>
-          </div>
-          <div className="flex flex-col gap-2">
-            <Button disabled>Crear plan</Button>
-            <p className="text-center text-xs text-muted-foreground">Disponible próximamente</p>
-          </div>
-        </section>
-      );
+      return <NoActivePlanState />;
 
     case "error":
       return (

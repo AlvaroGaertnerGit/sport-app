@@ -22,7 +22,7 @@ export function ProgressBar({ segments }: { segments: readonly SegmentState[] })
   return (
     <div aria-hidden="true" className="flex items-end gap-1">
       {segments.map((state, i) => (
-        <span key={i} className={`flex-1 transition-colors ${SEGMENT_CLASSNAME[state]}`} />
+        <span key={i} className={`flex-1 transition-all duration-200 ${SEGMENT_CLASSNAME[state]}`} />
       ))}
     </div>
   );

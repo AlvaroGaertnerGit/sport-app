@@ -1,7 +1,7 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
-import type { ActivePlan, NextPlanItem } from "./types";
+import type { ActivePlan, PlanItemSummary } from "./types";
 
 /**
  * The user's single active plan, or null if they don't have one — a valid,
@@ -51,33 +51,48 @@ export function pickNextPlanItem<T extends { order: number }>(
 }
 
 /**
- * The next plan_item in the rotation for `planId`, per the rule above.
- * Only `workout_sessions` with `status = 'completed'` count toward "last
- * completed" — `in_progress`/`abandoned` sessions and `activities` never
- * affect the rotation (activities can't: they have no plan_item_id at
- * all).
+ * Every plan_item in `planId`, in rotation order — the full structure
+ * Plan's rotation list needs. `getNextPlanItem` below is built on top of
+ * this rather than running its own near-identical query (this used to be
+ * inlined there, back when nothing needed the full list).
  */
-export async function getNextPlanItem(
-  userId: string,
-  planId: string,
-): Promise<NextPlanItem | null> {
+export async function getPlanItems(userId: string, planId: string): Promise<PlanItemSummary[]> {
   const supabase = await createClient();
 
-  const { data: items, error: itemsError } = await supabase
+  const { data: items, error } = await supabase
     .from("plan_items")
     .select("id, order, routine_id, routines(name), plans!inner(user_id)")
     .eq("plan_id", planId)
     .eq("plans.user_id", userId)
     .order("order", { ascending: true });
 
-  if (itemsError) {
-    throw new Error(`getNextPlanItem: ${itemsError.message}`);
-  }
-  if (!items || items.length === 0) {
-    return null;
+  if (error) {
+    throw new Error(`getPlanItems: ${error.message}`);
   }
 
-  const { data: lastCompleted, error: lastCompletedError } = await supabase
+  return (items ?? []).map((item) => ({
+    planItemId: item.id,
+    routineId: item.routine_id,
+    routineName: item.routines?.name ?? "",
+    order: item.order,
+  }));
+}
+
+/**
+ * The `order` of the plan_item behind the most recently completed session
+ * in `planId`, or null if none has ever been completed. Only `completed`
+ * counts — `in_progress`/`abandoned` sessions and `activities` never move
+ * the rotation (activities can't: they have no plan_item_id at all).
+ *
+ * Exported (not just an internal step of `getNextPlanItem`) so a caller
+ * that already has the full `getPlanItems()` list — Plan's rotation view —
+ * can derive "which one is next" via `pickNextPlanItem` itself instead of
+ * fetching `plan_items` a second time through `getNextPlanItem`.
+ */
+export async function getLastCompletedPlanItemOrder(userId: string, planId: string): Promise<number | null> {
+  const supabase = await createClient();
+
+  const { data: lastCompleted, error } = await supabase
     .from("workout_sessions")
     .select("plan_items!inner(order, plan_id)")
     .eq("user_id", userId)
@@ -88,21 +103,23 @@ export async function getNextPlanItem(
     .limit(1)
     .maybeSingle();
 
-  if (lastCompletedError) {
-    throw new Error(`getNextPlanItem: ${lastCompletedError.message}`);
+  if (error) {
+    throw new Error(`getLastCompletedPlanItemOrder: ${error.message}`);
   }
 
-  const lastCompletedOrder = lastCompleted?.plan_items?.order ?? null;
-  const next = pickNextPlanItem(items, lastCompletedOrder);
+  return lastCompleted?.plan_items?.order ?? null;
+}
 
-  if (!next) {
+/** The next plan_item in the rotation for `planId`, per `pickNextPlanItem`'s rule. */
+export async function getNextPlanItem(
+  userId: string,
+  planId: string,
+): Promise<PlanItemSummary | null> {
+  const items = await getPlanItems(userId, planId);
+  if (items.length === 0) {
     return null;
   }
 
-  return {
-    planItemId: next.id,
-    routineId: next.routine_id,
-    routineName: next.routines?.name ?? "",
-    order: next.order,
-  };
+  const lastCompletedOrder = await getLastCompletedPlanItemOrder(userId, planId);
+  return pickNextPlanItem(items, lastCompletedOrder);
 }

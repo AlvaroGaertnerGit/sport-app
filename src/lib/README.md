@@ -9,11 +9,15 @@ src/lib/
   auth/
     dal.ts      getCurrentUser() / getCurrentProfile() / requireUser()
   domain/
-    plans.ts     getActivePlan(), getNextPlanItem(), pickNextPlanItem()
-    sessions.ts  getInProgressSession()
-    routines.ts  getRoutineExerciseCount()
-    today.ts     getTodayRecommendation() — composes the above for /today
-    types.ts     ActivePlan, InProgressSession, NextPlanItem, TodayRecommendation
+    plans.ts             getActivePlan(), getPlanItems(), getNextPlanItem(), pickNextPlanItem()
+    sessions.ts          getInProgressSession()
+    routines.ts          getRoutineExerciseCount(), getRoutineDetail()
+    workout-session.ts   getWorkoutSession(), createWorkoutSession(), logSet(), completeWorkoutSession(), abandonWorkoutSession()
+    exercise-progress.ts isExerciseSetsDone(), formatExerciseTarget() — pure/isomorphic, not behind "server-only"
+    history.ts           getSessionHistory()
+    progress.ts          getProgressSummary(), computeStreaks(), getPeriodStartISO()
+    today.ts             getTodayRecommendation() — composes the above for /today
+    types.ts             return types shared across the above (ActivePlan, PlanItemSummary, WorkoutSessionDetail, ProgressSummary, RoutineDetail, ...)
 ```
 
 ## Layering (current and intended)

@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 
 import { Button, ButtonArrow } from "@/components/ui/button";
+import { ErrorText } from "@/components/ui/error-text";
 
 import { startWorkoutAction, type StartWorkoutState } from "./actions";
 
@@ -23,11 +24,7 @@ export function StartWorkoutButton({ planItemId }: { planItemId: string }) {
           </>
         )}
       </Button>
-      {state?.error && (
-        <p role="alert" className="text-center text-sm text-destructive">
-          {state.error}
-        </p>
-      )}
+      {state?.error && <ErrorText center>{state.error}</ErrorText>}
     </form>
   );
 }
