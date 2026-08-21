@@ -1,26 +1,120 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: oklch(0.985 0.002 90);
+  --foreground: oklch(0.18 0.01 260);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.18 0.01 260);
+  --border: oklch(0.9 0.005 260);
+  --muted: oklch(0.95 0.003 260);
+  --muted-foreground: oklch(0.48 0.01 260);
+  --primary: oklch(0.55 0.14 149);
+  --primary-foreground: oklch(0.99 0 0);
+  --destructive: oklch(0.55 0.2 25);
+  --destructive-foreground: oklch(0.99 0 0);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-border: var(--border);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  /*
+   * Motion tokens: no framer-motion in this project (deliberate -- see
+   * the `motion` skill's own note that it isn't installed here, and this
+   * app's established no-new-dependency precedent). These few
+   * transform/opacity-only keyframes cover everything Workout v2 needs
+   * (phase transitions, a completed-set pop, a confirmation entrance).
+   * Centralized here instead of inline per component so there's one
+   * motion language, same intent as the skill's token files.
+   */
+  --animate-fade-in: fade-in 200ms ease-out;
+  --animate-scale-in: scale-in 200ms ease-out;
+  --animate-check-pop: check-pop 320ms ease-out;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes check-pop {
+  0% {
+    opacity: 0.6;
+    transform: scale(0.85);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.06);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/*
+ * Global reduced-motion safety net: every animation/transition on the
+ * page collapses to effectively instant. This is the "don't hand-roll
+ * useReducedMotion() per component" guarantee the `motion` skill asks
+ * for, done in plain CSS since there's no MotionProvider here.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: oklch(0.16 0.006 260);
+    --foreground: oklch(0.96 0.003 260);
+    --card: oklch(0.21 0.007 260);
+    --card-foreground: oklch(0.96 0.003 260);
+    --border: oklch(0.3 0.01 260);
+    --muted: oklch(0.26 0.008 260);
+    --muted-foreground: oklch(0.65 0.01 260);
+    --primary: oklch(0.58 0.15 149);
+    --primary-foreground: oklch(0.99 0 0);
+    --destructive: oklch(0.62 0.19 25);
+    --destructive-foreground: oklch(0.99 0 0);
   }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  /* Geist, self-hosted via next/font (layout.tsx) -- was hardcoded to
+     Arial here, silently overriding it on every page. */
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
 }

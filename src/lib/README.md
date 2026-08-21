@@ -8,28 +8,35 @@ src/lib/
     proxy.ts    updateSession() — session refresh + optimistic redirect, used by src/proxy.ts
   auth/
     dal.ts      getCurrentUser() / getCurrentProfile() / requireUser()
+  domain/
+    plans.ts     getActivePlan(), getNextPlanItem(), pickNextPlanItem()
+    sessions.ts  getInProgressSession()
+    routines.ts  getRoutineExerciseCount()
+    today.ts     getTodayRecommendation() — composes the above for /today
+    types.ts     ActivePlan, InProgressSession, NextPlanItem, TodayRecommendation
 ```
 
 ## Layering (current and intended)
 
 ```
 UI (Server/Client Components)
-  -> src/lib/auth/dal.ts            "who is the current user?"
-  -> (future) src/lib/domain/*.ts    Sport Coach domain reads/writes
+  -> src/lib/auth/dal.ts        "who is the current user?"
+  -> src/lib/domain/*.ts        Sport Coach domain reads/writes
        -> src/lib/supabase/server.ts (or client.ts from a Client Component)
             -> Supabase (RLS-enforced)
 ```
 
 Components should never call `supabase.from(...)` directly for anything
 beyond the most trivial, obviously-owner-scoped read. Domain functions
-(`getActivePlan()`, `getNextWorkout()`, `createWorkoutSession()`,
-`completeWorkoutSession()`, `logSet()`, `createActivity()`, ...) belong in
-a future `src/lib/domain/` — **not built in this phase**. When that phase
-starts, each domain function calls `getCurrentUser()`/`requireUser()` from
-`auth/dal.ts` rather than re-deriving auth state, and uses the server
-Supabase client — RLS still does the actual authorization; the domain
-layer's job is centralizing *how* data is fetched/shaped, not re-checking
-ownership by hand.
+(`getActivePlan()`, `getNextPlanItem()`, `getTodayRecommendation()`,
+`createWorkoutSession()`, `completeWorkoutSession()`, `logSet()`,
+`createActivity()`, ...) belong in `src/lib/domain/` — write-side
+functions are not built yet, only the reads Today needs. Each domain
+function calls `requireUser()`/receives `userId` from a caller that
+already did, rather than re-deriving auth state itself, and uses the
+server Supabase client — RLS still does the actual authorization; the
+domain layer's job is centralizing *how* data is fetched/shaped, not
+re-checking ownership by hand.
 
 `src/lib/supabase/*` has zero Sport Coach-specific logic — it only knows
 how to construct a client and refresh a session. `src/lib/auth/dal.ts`
