@@ -1,7 +1,7 @@
 // Resistance bands -- banded-hip-abduction and monster-walk already live
 // in legs.mjs (they're leg-focused despite the equipment). face-pull
 // already exists in the catalog (unlinked to any equipment there).
-export default [
+const exercises = [
   {
     slug: "band-row",
     name: "Band Row",
@@ -135,3 +135,5 @@ export default [
     mistakes: "Arquear la espalda baja para ganar recorrido.",
   },
 ];
+
+export default exercises;

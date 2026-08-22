@@ -1,5 +1,5 @@
 // Plyometrics -- box-jump and burpee already exist.
-export default [
+const exercises = [
   {
     slug: "broad-jump",
     name: "Broad Jump",
@@ -111,3 +111,5 @@ export default [
     mistakes: "Usar impulso excesivo del brazo contrario en vez de fuerza de la pierna.",
   },
 ];
+
+export default exercises;

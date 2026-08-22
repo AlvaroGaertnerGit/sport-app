@@ -2,7 +2,7 @@
 // pull-up, chin-up, weighted/assisted/australian pull-up, muscle-up,
 // toes-to-bar, dead-hang, l-sit, hollow-body-hold, dip variants,
 // handstand-push-up, pike-push-up, diamond/wide/incline push-up already exist.
-export default [
+const exercises = [
   {
     slug: "wide-grip-pull-up",
     name: "Wide-Grip Pull Up",
@@ -224,3 +224,5 @@ export default [
     mistakes: "Flexionar la cadera perdiendo la línea recta del cuerpo.",
   },
 ];
+
+export default exercises;

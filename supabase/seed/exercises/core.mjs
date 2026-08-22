@@ -1,7 +1,7 @@
 // Core -- plank/, crunches/rotational not already in the catalog.
 // plank, side-plank, crunch, russian-twist, v-up, hanging-leg-raise,
 // hanging-knee-raise, arch-hold, l-sit, hollow-body-hold already exist.
-export default [
+const exercises = [
   {
     slug: "dead-bug",
     name: "Dead Bug",
@@ -135,3 +135,5 @@ export default [
     mistakes: "Balancear el torso en vez de aislar el movimiento en el abdomen.",
   },
 ];
+
+export default exercises;

@@ -1,6 +1,6 @@
 // Arms -- biceps/triceps isolation work. Currently the thinnest coverage
 // in the catalog (biceps: 7 rows, mostly secondary from pulls/rows).
-export default [
+const exercises = [
   {
     slug: "barbell-curl",
     name: "Barbell Curl",
@@ -189,3 +189,5 @@ export default [
     mistakes: "Mover el codo en vez de aislar el movimiento en la muñeca.",
   },
 ];
+
+export default exercises;

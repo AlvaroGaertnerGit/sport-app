@@ -5,7 +5,7 @@
 // machine-shoulder-press lives in shoulders.mjs; machine-triceps-extension
 // lives in arms.mjs -- grouped by muscle, not equipment, to avoid a
 // second axis of categorization for the same exercises).
-export default [
+const exercises = [
   {
     slug: "assisted-pull-up-machine",
     name: "Assisted Pull-Up Machine",
@@ -62,3 +62,5 @@ export default [
     mistakes: "Colocar el banco fuera de la trayectoria vertical de la barra.",
   },
 ];
+
+export default exercises;

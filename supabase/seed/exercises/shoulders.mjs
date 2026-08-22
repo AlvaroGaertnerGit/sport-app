@@ -1,5 +1,5 @@
 // Shoulders -- presses, raises, rear-delt work not already in the catalog.
-export default [
+const exercises = [
   {
     slug: "arnold-press",
     name: "Arnold Press",
@@ -122,3 +122,5 @@ export default [
     mistakes: "Perder la posición de cadera elevada durante el descenso.",
   },
 ];
+
+export default exercises;

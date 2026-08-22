@@ -120,6 +120,28 @@ export type HistorySessionSummary = {
   exerciseCount: number
 }
 
+/**
+ * Calendar types — a temporal-spatial view of the exact same
+ * workout_sessions data HistorySessionSummary already reads, grouped by
+ * UTC calendar day instead of listed chronologically. `sessionsByDate` can
+ * hold more than one entry per key -- real accounts have multiple sessions
+ * on the same day, and none of them get silently dropped.
+ */
+
+export type CalendarDaySession = {
+  sessionId: string
+  routineName: string | null
+  status: WorkoutSessionStatus
+  startedAt: string
+}
+
+export type TrainingCalendarMonth = {
+  year: number
+  /** 1-12 */
+  month: number
+  sessionsByDate: Record<string, CalendarDaySession[]>
+}
+
 export type ProgressPeriod = "7d" | "30d" | "3m" | "1y" | "all"
 
 export type TopExerciseStat = {

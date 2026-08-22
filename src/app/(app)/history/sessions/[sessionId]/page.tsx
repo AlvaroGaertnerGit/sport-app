@@ -1,65 +1,18 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { DISPLAY_HEADING_CLASSNAME, EYEBROW_CLASSNAME } from "@/components/ui/typography";
 import { requireUser } from "@/lib/auth/dal";
-import { formatDurationMinutes, formatShortDate } from "@/lib/format";
-import { formatExerciseTarget, getWorkoutSession } from "@/lib/domain";
-import { formatSetLogValue } from "@/lib/domain/exercise-progress";
-import type { WorkoutSessionExercise } from "@/lib/domain";
+import { getWorkoutSession } from "@/lib/domain";
+
+import { SessionDetail } from "../../session-detail";
 
 /**
- * Read-only. No stepper, no register-set form, no edit affordance -- the
- * brief is explicit that history doesn't support editing the past yet.
- * Reuses `getWorkoutSession` as-is (it already returns routine, exercises,
- * targets and set logs for any status, not just in_progress) instead of a
- * new domain function.
+ * Read-only. Reuses `getWorkoutSession` as-is (it already returns routine,
+ * exercises, targets and set logs for any status, not just in_progress)
+ * and the shared `SessionDetail` presentational component -- also reused
+ * inline by Calendar's day detail, so there is exactly one implementation
+ * of "how a finished session renders."
  */
-function ExerciseSummary({ exercise }: { exercise: WorkoutSessionExercise }) {
-  const rowCount = Math.max(exercise.targetSets, exercise.setLogs.length);
-
-  return (
-    <div className="flex flex-col gap-3 border-t border-border pt-6">
-      <div className="flex flex-col gap-1">
-        <p className="font-sans text-xl font-black text-foreground uppercase leading-tight">
-          {exercise.exerciseName}
-        </p>
-        <p className="font-mono text-xs tracking-wide text-muted-foreground uppercase">
-          {exercise.targetSets} × {formatExerciseTarget(exercise)}
-        </p>
-      </div>
-      <div className="flex flex-col border-t border-border">
-        {Array.from({ length: rowCount }, (_, i) => exercise.setLogs[i]).map((log, i) => (
-          <div key={i} className="flex min-h-11 items-center gap-4 border-b border-border py-2">
-            <span className="w-6 shrink-0 font-mono text-sm text-muted-foreground tabular-nums">
-              {String(i + 1).padStart(2, "0")}
-            </span>
-            {log ? (
-              <>
-                <span aria-hidden="true" className="text-lg text-success">
-                  ✓
-                </span>
-                <span className="sr-only">Completada</span>
-                <span className="ml-auto font-mono text-lg font-semibold text-foreground tabular-nums">
-                  {formatSetLogValue(exercise, log)}
-                </span>
-              </>
-            ) : (
-              <>
-                <span aria-hidden="true" className="text-lg text-muted-foreground/50">
-                  ○
-                </span>
-                <span className="sr-only">No registrada</span>
-                <span className="ml-auto font-mono text-lg text-muted-foreground/50 tabular-nums">—</span>
-              </>
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 export default async function SessionDetailPage(props: PageProps<"/history/sessions/[sessionId]">) {
   const user = await requireUser();
   const { sessionId } = await props.params;
@@ -70,11 +23,6 @@ export default async function SessionDetailPage(props: PageProps<"/history/sessi
     notFound();
   }
 
-  const durationMinutes =
-    session.status === "completed" && session.completedAt
-      ? Math.round((new Date(session.completedAt).getTime() - new Date(session.startedAt).getTime()) / 60000)
-      : null;
-
   return (
     <div className="flex flex-1 flex-col gap-6 px-5 pt-6 pb-10">
       <Link
@@ -84,24 +32,7 @@ export default async function SessionDetailPage(props: PageProps<"/history/sessi
         ← Volver
       </Link>
 
-      <div className="flex flex-col gap-2">
-        <p className={EYEBROW_CLASSNAME}>{formatShortDate(session.startedAt)}</p>
-        <h1 className={DISPLAY_HEADING_CLASSNAME} style={{ fontSize: "clamp(2rem, 10vw, 3.25rem)" }}>
-          {session.routineName ?? "Entrenamiento libre"}
-        </h1>
-        <p className="font-mono text-xs tracking-widest text-muted-foreground uppercase">
-          {durationMinutes != null && <>{formatDurationMinutes(durationMinutes)} · </>}
-          {session.status === "completed" ? "Completado" : "Abandonado"}
-        </p>
-      </div>
-
-      {session.exercises.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Esta sesión no tiene ejercicios registrados.</p>
-      ) : (
-        session.exercises.map((exercise) => (
-          <ExerciseSummary key={exercise.exerciseId} exercise={exercise} />
-        ))
-      )}
+      <SessionDetail session={session} />
     </div>
   );
 }

@@ -14,8 +14,8 @@ const PERIOD_DAYS: Record<Exclude<ProgressPeriod, "all">, number> = {
 const BUCKETED_PERIODS = new Set<ProgressPeriod>(["7d", "30d"]);
 const TOP_EXERCISES_LIMIT = 5;
 
-/** UTC calendar date ("YYYY-MM-DD") — the app has no per-user timezone-aware date logic anywhere yet (Today doesn't either), so this is a documented simplification, not a hidden bug. */
-function toUTCDateKey(iso: string): string {
+/** UTC calendar date ("YYYY-MM-DD") — the app has no per-user timezone-aware date logic anywhere yet (Today doesn't either), so this is a documented simplification, not a hidden bug. Exported so Calendar buckets sessions into days the exact same way Progress's own activity strip does. */
+export function toUTCDateKey(iso: string): string {
   return iso.slice(0, 10);
 }
 

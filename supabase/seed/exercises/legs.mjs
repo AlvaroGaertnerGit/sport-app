@@ -3,7 +3,7 @@
 // conventional-deadlift, bulgarian-split-squat, hip-thrust, glute-bridge,
 // leg-press/-extension/-curl, calf-raise, zercher-squat, step-up,
 // reverse-lunge, walking-lunge already exist -- not repeated here.
-export default [
+const exercises = [
   {
     slug: "hack-squat",
     name: "Hack Squat",
@@ -225,3 +225,5 @@ export default [
     mistakes: "Pasos demasiado pequeños que reducen la activación del glúteo.",
   },
 ];
+
+export default exercises;

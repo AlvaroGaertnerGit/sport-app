@@ -5,7 +5,7 @@
 // cable-overhead-extension; legs.mjs has cable-pull-through,
 // cable-glute-kickback; core.mjs has cable-crunch, pallof-press,
 // woodchopper. face-pull already exists in the base catalog.
-export default [
+const exercises = [
   {
     slug: "cable-upright-row",
     name: "Cable Upright Row",
@@ -84,3 +84,5 @@ export default [
     mistakes: "Rotar los hombros en vez de elevarlos en línea recta.",
   },
 ];
+
+export default exercises;

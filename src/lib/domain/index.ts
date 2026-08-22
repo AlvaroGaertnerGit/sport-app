@@ -1,3 +1,4 @@
+export { buildCalendarWeeks, getTrainingCalendarMonth, type CalendarCell } from "./calendar";
 export { formatExerciseTarget, isExerciseSetsDone } from "./exercise-progress";
 export { searchExercises } from "./exercises";
 export { getSessionHistory } from "./history";
@@ -51,6 +52,7 @@ export {
 export type {
   ActivePlan,
   ActivityBucket,
+  CalendarDaySession,
   CoachExerciseNote,
   CoachSummary,
   ExerciseHighlight,
@@ -68,6 +70,7 @@ export type {
   RoutineSummary,
   TodayRecommendation,
   TopExerciseStat,
+  TrainingCalendarMonth,
   WorkoutSessionDetail,
   WorkoutSessionExercise,
   WorkoutSessionStatus,

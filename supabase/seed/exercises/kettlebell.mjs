@@ -1,6 +1,6 @@
 // Kettlebell -- kettlebell-swing, kettlebell-snatch, turkish-get-up,
 // goblet-squat, farmers-carry already exist.
-export default [
+const exercises = [
   {
     slug: "kettlebell-clean",
     name: "Kettlebell Clean",
@@ -112,3 +112,5 @@ export default [
     mistakes: "Inclinar el torso para compensar el peso en vez de mantenerlo erguido.",
   },
 ];
+
+export default exercises;

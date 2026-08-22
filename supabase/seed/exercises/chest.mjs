@@ -1,7 +1,7 @@
 // Chest -- bench/press/fly variants not already in the catalog.
 // Fields match public.exercises + exercise_equipment exactly (see
 // supabase/seed/README.md for the full contract and how to add more).
-export default [
+const exercises = [
   {
     slug: "decline-barbell-bench-press",
     name: "Decline Barbell Bench Press",
@@ -168,3 +168,5 @@ export default [
     mistakes: "Cortar el recorrido en arco en vez de deslizar todo el cuerpo.",
   },
 ];
+
+export default exercises;

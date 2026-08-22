@@ -1,5 +1,5 @@
 // Back -- rows, pulldowns, pullovers, shrugs not already in the catalog.
-export default [
+const exercises = [
   {
     slug: "seated-cable-row",
     name: "Seated Cable Row",
@@ -177,3 +177,5 @@ export default [
     mistakes: "Rodillas colapsando hacia dentro durante el tirón.",
   },
 ];
+
+export default exercises;
