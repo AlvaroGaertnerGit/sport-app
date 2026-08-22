@@ -1,13 +1,7 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
-import type {
-  ActivityBucket,
-  PersonalBestStat,
-  ProgressPeriod,
-  ProgressSummary,
-  TopExerciseStat,
-} from "./types";
+import type { ActivityBucket, PersonalBestStat, ProgressPeriod, ProgressSummary, TopExerciseStat } from "./types";
 
 const DAY_MS = 86_400_000;
 const PERIOD_DAYS: Record<Exclude<ProgressPeriod, "all">, number> = {
@@ -99,11 +93,9 @@ function buildDailyBuckets(activeDayKeys: ReadonlySet<string>, days: number, now
  *      `duration_seconds`) tells you its type; no join to
  *      routine_exercises.target_type is needed to keep the two apart.
  *
- * Deliberately does not compute volume (sets x reps x weight): the current
- * Workout UI never writes `set_logs.weight_kg` (confirmed against real
- * data -- 0 of the seeded set_logs have it), so there is nothing real to
- * sum. Faking it with a default weight would be exactly the "engañosa
- * aproximación" the brief rules out.
+ * Volume (Σ weight_kg × reps) is summed only over sets that logged both a
+ * weight and reps -- a duration set or a bodyweight rep never contributes,
+ * so this never blends unrelated units into one misleading number.
  */
 export async function getProgressSummary(userId: string, period: ProgressPeriod): Promise<ProgressSummary> {
   const supabase = await createClient();
@@ -174,11 +166,12 @@ export async function getProgressSummary(userId: string, period: ProgressPeriod)
   let personalBests: PersonalBestStat[] = [];
   let totalReps = 0;
   let totalDurationSeconds = 0;
+  let totalVolumeKg = 0;
 
   if (workoutsCompleted > 0) {
     let setLogsQuery = supabase
       .from("set_logs")
-      .select("exercise_id, reps, duration_seconds, exercises(name), workout_sessions!inner(user_id, status, started_at)")
+      .select("exercise_id, reps, duration_seconds, weight_kg, exercises(name), workout_sessions!inner(user_id, status, started_at)")
       .eq("workout_sessions.user_id", userId)
       .eq("workout_sessions.status", "completed");
     if (periodStart) {
@@ -191,18 +184,28 @@ export async function getProgressSummary(userId: string, period: ProgressPeriod)
 
     const exerciseStats = new Map<
       string,
-      { name: string; count: number; maxReps: number | null; maxDurationSeconds: number | null }
+      {
+        name: string;
+        count: number;
+        maxReps: number | null;
+        maxDurationSeconds: number | null;
+        maxWeightKg: number | null;
+        repsAtMaxWeight: number | null;
+      }
     >();
 
     for (const log of setLogRows ?? []) {
       if (log.reps != null) totalReps += log.reps;
       if (log.duration_seconds != null) totalDurationSeconds += log.duration_seconds;
+      if (log.weight_kg != null && log.reps != null) totalVolumeKg += log.weight_kg * log.reps;
 
       const entry = exerciseStats.get(log.exercise_id) ?? {
         name: log.exercises?.name ?? "Ejercicio",
         count: 0,
         maxReps: null,
         maxDurationSeconds: null,
+        maxWeightKg: null,
+        repsAtMaxWeight: null,
       };
       entry.count += 1;
       if (log.reps != null) {
@@ -212,6 +215,10 @@ export async function getProgressSummary(userId: string, period: ProgressPeriod)
         entry.maxDurationSeconds =
           entry.maxDurationSeconds == null ? log.duration_seconds : Math.max(entry.maxDurationSeconds, log.duration_seconds);
       }
+      if (log.weight_kg != null && (entry.maxWeightKg == null || log.weight_kg > entry.maxWeightKg)) {
+        entry.maxWeightKg = log.weight_kg;
+        entry.repsAtMaxWeight = log.reps;
+      }
       exerciseStats.set(log.exercise_id, entry);
     }
 
@@ -220,9 +227,21 @@ export async function getProgressSummary(userId: string, period: ProgressPeriod)
       .slice(0, TOP_EXERCISES_LIMIT)
       .map(([exerciseId, stat]) => ({ exerciseId, name: stat.name, timesPerformed: stat.count }));
 
+    // A weighted exercise's PR is the heaviest single set moved (the
+    // standard informal definition) — checked first since a set can have
+    // both reps and a weight, and weight is the more meaningful ceiling.
     personalBests = topExercises
       .map((exercise): PersonalBestStat | null => {
         const stat = exerciseStats.get(exercise.exerciseId)!;
+        if (stat.maxWeightKg != null) {
+          return {
+            exerciseId: exercise.exerciseId,
+            name: exercise.name,
+            targetType: "weight",
+            bestValue: stat.maxWeightKg,
+            repsAtBestWeight: stat.repsAtMaxWeight ?? undefined,
+          };
+        }
         if (stat.maxReps != null) {
           return { exerciseId: exercise.exerciseId, name: exercise.name, targetType: "reps", bestValue: stat.maxReps };
         }
@@ -248,6 +267,7 @@ export async function getProgressSummary(userId: string, period: ProgressPeriod)
     averageDurationMinutes,
     totalReps,
     totalDurationSeconds,
+    totalVolumeKg,
     activeDays: activeDayKeys.size,
     currentStreakDays,
     bestStreakDays,

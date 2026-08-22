@@ -1,20 +1,25 @@
+"use client";
+
 import { useEffect, useRef, type ReactNode } from "react";
 
 import { cardClassName } from "@/components/ui/card";
 
 /**
- * The one confirm/cancel layout shared by the three places Workout asks
- * "are you sure?" (skip exercise, finish with pending work, abandon).
- * Deliberately dumb: callers bring their own cancel/confirm buttons
- * (a plain button for a client-only action, a `<form>` around a submit
- * button for a Server Action) — this only owns the message + layout.
+ * The one confirm/cancel layout shared by every "are you sure?" moment in
+ * the app (Workout's skip/finish/abandon, Profile's logout, Plan's
+ * archive/remove) — moved here from `workout/[sessionId]/` once a third
+ * unrelated feature needed it. Deliberately dumb: callers bring their own
+ * cancel/confirm buttons (a plain button for a client-only action, a
+ * `<form>` around a submit button for a Server Action) — this only owns
+ * the message + layout.
  *
  * Two small pieces of keyboard/focus behavior live here rather than per
- * call site, since all three need the same thing: moving focus into the
- * panel when it appears (a keyboard user shouldn't have to hunt for it),
- * and letting Escape back out of it the same way tapping "Cancelar" does
- * -- without turning this into a real focus-trapped modal, which the
- * brief explicitly rules out ("no convertirlos en modales enormes").
+ * call site, since every caller needs the same thing: moving focus into
+ * the panel when it appears (a keyboard user shouldn't have to hunt for
+ * it), and letting Escape back out of it the same way tapping "Cancelar"
+ * does -- without turning this into a real focus-trapped modal, which the
+ * design direction explicitly rules out ("no convertirlos en modales
+ * enormes").
  */
 export function ConfirmPanel({
   message,

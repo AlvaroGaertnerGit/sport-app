@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 
 import { FOCUS_RING_CLASSNAME } from "@/components/ui/button";
 import { requireUser } from "@/lib/auth/dal";
-import { getWorkoutSession } from "@/lib/domain";
+import { getRoutineExerciseProgressions, getWorkoutSession, type ExerciseProgression } from "@/lib/domain";
 
 import { WorkoutSessionView } from "./session-view";
 
@@ -47,5 +47,33 @@ export default async function WorkoutSessionPage(props: PageProps<"/workout/[ses
     );
   }
 
-  return <WorkoutSessionView session={session} />;
+  // Needs session.exercises (the routine's targets), so it can't run
+  // alongside getWorkoutSession itself -- still just one extra query pair
+  // total (see getRoutineExerciseProgressions), not one per exercise.
+  //
+  // A recommendation is a bonus, never a requirement to train: if this
+  // throws for any reason, Workout must still render with the routine's
+  // own original targets rather than taking the whole page down with it.
+  let progressions = new Map<string, ExerciseProgression>();
+  if (session.routineId && session.exercises.length > 0) {
+    try {
+      progressions = await getRoutineExerciseProgressions(
+        user.id,
+        session.routineId,
+        session.exercises.map((exercise) => ({
+          exerciseId: exercise.exerciseId,
+          targetType: exercise.targetType,
+          targetSets: exercise.targetSets,
+          targetRepsMin: exercise.targetRepsMin,
+          targetRepsMax: exercise.targetRepsMax,
+          targetDurationSeconds: exercise.targetDurationSeconds,
+          targetWeightKg: exercise.targetWeightKg,
+        })),
+      );
+    } catch (err) {
+      console.error("getRoutineExerciseProgressions failed:", err);
+    }
+  }
+
+  return <WorkoutSessionView session={session} progressions={progressions} />;
 }

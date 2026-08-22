@@ -5,6 +5,7 @@ import { DISPLAY_HEADING_CLASSNAME, EYEBROW_CLASSNAME } from "@/components/ui/ty
 import { requireUser } from "@/lib/auth/dal";
 import { formatDurationMinutes, formatShortDate } from "@/lib/format";
 import { formatExerciseTarget, getWorkoutSession } from "@/lib/domain";
+import { formatSetLogValue } from "@/lib/domain/exercise-progress";
 import type { WorkoutSessionExercise } from "@/lib/domain";
 
 /**
@@ -40,7 +41,7 @@ function ExerciseSummary({ exercise }: { exercise: WorkoutSessionExercise }) {
                 </span>
                 <span className="sr-only">Completada</span>
                 <span className="ml-auto font-mono text-lg font-semibold text-foreground tabular-nums">
-                  {exercise.targetType === "duration" ? `${log.durationSeconds}s` : log.reps}
+                  {formatSetLogValue(exercise, log)}
                 </span>
               </>
             ) : (

@@ -1,5 +1,6 @@
+import { ProfileLink } from "@/components/app-shell/profile-link";
 import { requireUser } from "@/lib/auth/dal";
-import { getProgressSummary } from "@/lib/domain";
+import { getActivePlanExerciseProgressions, getProgressSummary, selectImprovingHighlights } from "@/lib/domain";
 import type { ProgressPeriod } from "@/lib/domain";
 
 import { HistoryTabs } from "./history-tabs";
@@ -18,16 +19,24 @@ export default async function ProgressPage(props: PageProps<"/history">) {
   const searchParams = await props.searchParams;
   const period = parsePeriod(searchParams.period);
 
-  const summary = await getProgressSummary(user.id, period);
+  // "Mejorando" (via the Progression Engine) is deliberately not
+  // period-scoped -- it always reads the last few completed sessions per
+  // exercise, regardless of which period tab is selected -- so it's
+  // fetched independently of `summary`, not derived from it.
+  const [summary, planProgressions] = await Promise.all([
+    getProgressSummary(user.id, period),
+    getActivePlanExerciseProgressions(user.id),
+  ]);
+  const improving = selectImprovingHighlights(planProgressions);
 
   return (
     <div className="flex flex-1 flex-col gap-6 px-5 pt-6">
-      <HistoryTabs current="progress" />
+      <HistoryTabs current="progress" trailing={<ProfileLink />} />
       <PeriodTabs current={period} />
       {/* Keyed on period so switching tabs replays the entrance animation
           instead of the numbers silently swapping in place. */}
       <div key={period} className="animate-fade-in">
-        <ProgressView summary={summary} />
+        <ProgressView summary={summary} improving={improving} />
       </div>
     </div>
   );

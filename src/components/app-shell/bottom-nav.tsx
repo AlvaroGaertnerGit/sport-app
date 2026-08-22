@@ -63,7 +63,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Hoy", href: "/today", Icon: TodayIcon },
   { label: "Plan", href: "/plan", Icon: PlanIcon },
   { label: "Historial", href: "/history", Icon: HistoryIcon },
-  { label: "Coach", Icon: CoachIcon },
+  { label: "Coach", href: "/coach", Icon: CoachIcon },
 ];
 
 const ITEM_CLASSNAME =

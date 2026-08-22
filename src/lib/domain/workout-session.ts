@@ -219,7 +219,7 @@ async function insertSetLogAtNextOrder(
   supabase: SupabaseServerClient,
   sessionId: string,
   exerciseId: string,
-  values: { reps: number } | { duration_seconds: number },
+  values: ({ reps: number } | { duration_seconds: number }) & { weight_kg?: number },
 ) {
   const { data: maxOrderRow, error: maxOrderError } = await supabase
     .from("set_logs")
@@ -255,6 +255,14 @@ async function insertSetLogAtNextOrder(
  * session ownership but has no way to know which exercises belong to a
  * routine, so that check has to live here.
  *
+ * `weightKg` is likewise only ever written when *this routine_exercise's*
+ * `target_weight_kg` is set -- re-derived server-side from the same read,
+ * never from whether the caller happened to send one. Whether a given
+ * exercise needs a weight is a per-routine decision (the same exercise
+ * can be bodyweight in one routine and loaded in another), not a property
+ * of the exercise or its equipment, which is why `target_weight_kg` --
+ * already on `routine_exercises` -- is the signal, not a new column.
+ *
  * `set_logs.order` is unique per *session* (not per exercise), so it's
  * computed as max(order)+1 across the whole session. A race on that
  * counter (double click) is retried once with a freshly computed order
@@ -265,6 +273,7 @@ export async function logSet(
   sessionId: string,
   exerciseId: string,
   value: number,
+  weightKg?: number,
 ): Promise<{ setLogId: string }> {
   const supabase = await createClient();
 
@@ -288,7 +297,7 @@ export async function logSet(
 
   const { data: routineExercise, error: routineExerciseError } = await supabase
     .from("routine_exercises")
-    .select("target_type")
+    .select("target_type, target_weight_kg")
     .eq("routine_id", session.routine_id)
     .eq("exercise_id", exerciseId)
     .maybeSingle();
@@ -300,10 +309,10 @@ export async function logSet(
     throw new Error("logSet: exercise is not part of this session's routine");
   }
 
-  const values =
-    routineExercise.target_type === "duration"
-      ? ({ duration_seconds: value } as const)
-      : ({ reps: value } as const);
+  const values = {
+    ...(routineExercise.target_type === "duration" ? { duration_seconds: value } : { reps: value }),
+    ...(routineExercise.target_weight_kg != null && weightKg != null ? { weight_kg: weightKg } : {}),
+  } as ({ reps: number } | { duration_seconds: number }) & { weight_kg?: number };
 
   let { data, error } = await insertSetLogAtNextOrder(supabase, sessionId, exerciseId, values);
 

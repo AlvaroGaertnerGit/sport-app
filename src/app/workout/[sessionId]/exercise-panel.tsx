@@ -6,8 +6,13 @@ import { CheckBadge } from "@/components/ui/check-badge";
 import { ErrorText } from "@/components/ui/error-text";
 import { DISPLAY_HEADING_CLASSNAME, EYEBROW_CLASSNAME } from "@/components/ui/typography";
 import { formatRestClock } from "@/lib/rest-timer";
-import { formatExerciseTarget as formatTarget } from "@/lib/domain/exercise-progress";
-import type { WorkoutSessionExercise } from "@/lib/domain";
+import {
+  formatExerciseTarget as formatTarget,
+  formatSetLogValue,
+  smartSetDefaults,
+  summarizeNextTarget,
+} from "@/lib/domain/exercise-progress";
+import type { ExerciseProgression, WorkoutSessionExercise } from "@/lib/domain";
 
 import type { LogSetActionState } from "./actions";
 import { SetValueStepper } from "./set-value-stepper";
@@ -22,22 +27,13 @@ export type ExercisePanelPhase =
   | "rest-done-continue"
   | "rest-done-exercise";
 
-function defaultSetValue(exercise: WorkoutSessionExercise): number {
-  if (exercise.targetType === "duration") {
-    return exercise.targetDurationSeconds ?? 0;
-  }
-  return exercise.targetRepsMax ?? exercise.targetRepsMin ?? 0;
-}
-
-function formatSetValue(
-  exercise: WorkoutSessionExercise,
-  log: WorkoutSessionExercise["setLogs"][number],
-): string {
-  return exercise.targetType === "duration" ? `${log.durationSeconds}s` : `${log.reps}`;
-}
-
-/** Nivel 1-2: nombre del ejercicio + objetivo -- domina la pantalla, sin caja. */
-function ExerciseHeader({ exercise }: { exercise: WorkoutSessionExercise }) {
+/**
+ * Nivel 1-2: nombre del ejercicio + objetivo -- domina la pantalla, sin caja.
+ * `nextTarget` (from the Training Progression Engine, src/lib/domain/progression.ts)
+ * is a quiet secondary line under the routine's own target -- it never
+ * becomes a second CTA; "Registrar serie" stays the one dominant action.
+ */
+function ExerciseHeader({ exercise, nextTarget }: { exercise: WorkoutSessionExercise; nextTarget: string | null }) {
   return (
     <div className="flex flex-col gap-2">
       <h1 className={DISPLAY_HEADING_CLASSNAME} style={{ fontSize: "clamp(2rem, 10vw, 3.25rem)" }}>
@@ -46,6 +42,7 @@ function ExerciseHeader({ exercise }: { exercise: WorkoutSessionExercise }) {
       <p className="font-mono text-sm tracking-wide text-muted-foreground uppercase">
         {exercise.targetSets} × {formatTarget(exercise)}
       </p>
+      {nextTarget && <p className="font-mono text-xs tracking-wide text-primary uppercase">Recomendado: {nextTarget}</p>}
     </div>
   );
 }
@@ -58,9 +55,12 @@ function ExerciseHeader({ exercise }: { exercise: WorkoutSessionExercise }) {
  */
 function SetRows({
   exercise,
+  progression,
   editable,
 }: {
   exercise: WorkoutSessionExercise;
+  /** null when there's no progression data (falls back to the routine's own template target — see `smartSetDefaults`). */
+  progression: ExerciseProgression | null;
   /** When false (already-done / read-only), no row gets a stepper. */
   editable: boolean;
 }) {
@@ -72,6 +72,12 @@ function SetRows({
       {Array.from({ length: rows }, (_, i) => exercise.setLogs[i]).map((log, i) => {
         const isActive = editable && !log && i === activeIndex;
         const setNumber = i + 1;
+        // Seeded once from the Progression Engine's own recommendation for
+        // *this* set (falls back to the routine's template target when
+        // there's none to trust) -- purely an initial value, never
+        // re-applied after the stepper mounts (see smartSetDefaults' own
+        // doc comment). Only computed when it'll actually be used.
+        const smart = isActive ? smartSetDefaults(exercise, progression, i) : null;
         return (
           <div key={i} className="flex min-h-14 items-center gap-4 border-b border-border py-2">
             <span className="w-6 shrink-0 font-mono text-sm text-muted-foreground tabular-nums">
@@ -85,17 +91,37 @@ function SetRows({
                 </span>
                 <span className="sr-only">Completada</span>
                 <span className="ml-auto font-mono text-lg font-semibold text-foreground tabular-nums">
-                  {formatSetValue(exercise, log)}
+                  {formatSetLogValue(exercise, log)}
                 </span>
               </>
-            ) : isActive ? (
-              <div className="ml-auto">
+            ) : isActive && smart ? (
+              <div className="ml-auto flex flex-col items-end gap-2">
                 <span className="sr-only">En curso</span>
-                <SetValueStepper
-                  compact
-                  label={`Serie ${setNumber}, ${exercise.targetType === "duration" ? "segundos" : "repeticiones"}`}
-                  defaultValue={defaultSetValue(exercise)}
-                />
+                {exercise.targetWeightKg != null && (
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-[10px] tracking-widest text-muted-foreground uppercase">Kg</span>
+                    <SetValueStepper
+                      compact
+                      label={`Serie ${setNumber}, kilos`}
+                      defaultValue={smart.weightKg ?? exercise.targetWeightKg}
+                      step={2.5}
+                      decimals={1}
+                      name="weightKg"
+                    />
+                  </div>
+                )}
+                <div className="flex items-center gap-2">
+                  {exercise.targetWeightKg != null && (
+                    <span className="font-mono text-[10px] tracking-widest text-muted-foreground uppercase">
+                      {exercise.targetType === "duration" ? "Seg" : "Reps"}
+                    </span>
+                  )}
+                  <SetValueStepper
+                    compact
+                    label={`Serie ${setNumber}, ${exercise.targetType === "duration" ? "segundos" : "repeticiones"}`}
+                    defaultValue={smart.value}
+                  />
+                </div>
               </div>
             ) : (
               <>
@@ -166,25 +192,30 @@ function TechniqueDisclosure({ exercise }: { exercise: WorkoutSessionExercise })
 function LoggingContent({
   sessionId,
   exercise,
+  progression,
   readOnly,
+  nextTarget,
   logAction,
   logState,
   logPending,
 }: {
   sessionId: string;
   exercise: WorkoutSessionExercise;
+  progression: ExerciseProgression | null;
   readOnly: boolean;
+  /** Only shown while the exercise is still actionable -- once every set is logged, the target line stops mattering. */
+  nextTarget: string | null;
   logAction: FormActionDispatch;
   logState: LogSetActionState;
   logPending: boolean;
 }) {
   return (
     <div className="flex flex-col gap-6">
-      <ExerciseHeader exercise={exercise} />
+      <ExerciseHeader exercise={exercise} nextTarget={readOnly ? null : nextTarget} />
       <ExerciseMedia exercise={exercise} />
       {readOnly ? (
         <>
-          <SetRows exercise={exercise} editable={false} />
+          <SetRows exercise={exercise} progression={null} editable={false} />
           <p className="text-center font-mono text-xs tracking-widest text-muted-foreground uppercase">
             Ejercicio completado
           </p>
@@ -193,7 +224,7 @@ function LoggingContent({
         <form action={logAction} className="flex flex-col gap-6">
           <input type="hidden" name="sessionId" value={sessionId} />
           <input type="hidden" name="exerciseId" value={exercise.exerciseId} />
-          <SetRows key={exercise.exerciseId} exercise={exercise} editable />
+          <SetRows key={exercise.exerciseId} exercise={exercise} progression={progression} editable />
           {logState?.error && <ErrorText>{logState.error}</ErrorText>}
           <Button type="submit" disabled={logPending}>
             {logPending ? (
@@ -338,6 +369,8 @@ function RestDoneExerciseBlock({
 type ExercisePanelProps = {
   sessionId: string;
   exercise: WorkoutSessionExercise;
+  /** null when there's no progression data yet (e.g. insufficient history) -- see src/lib/domain/progression.ts. */
+  progression: ExerciseProgression | null;
   phase: ExercisePanelPhase;
   isLastExercise: boolean;
   restRemainingSeconds: number;
@@ -361,6 +394,7 @@ type ExercisePanelProps = {
 export function ExercisePanel({
   sessionId,
   exercise,
+  progression,
   phase,
   isLastExercise,
   restRemainingSeconds,
@@ -399,7 +433,9 @@ export function ExercisePanel({
         <LoggingContent
           sessionId={sessionId}
           exercise={exercise}
+          progression={progression}
           readOnly={phase === "already-done"}
+          nextTarget={progression ? summarizeNextTarget(progression) : null}
           logAction={logAction}
           logState={logState}
           logPending={logPending}

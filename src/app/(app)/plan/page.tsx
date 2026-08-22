@@ -1,3 +1,7 @@
+import Link from "next/link";
+
+import { ProfileLink } from "@/components/app-shell/profile-link";
+import { FOCUS_RING_CLASSNAME } from "@/components/ui/button";
 import { EYEBROW_CLASSNAME } from "@/components/ui/typography";
 import { requireUser } from "@/lib/auth/dal";
 import {
@@ -17,7 +21,10 @@ export default async function PlanPage() {
   if (!plan) {
     return (
       <div className="flex flex-1 flex-col px-5 pt-8">
-        <p className={EYEBROW_CLASSNAME}>Plan</p>
+        <div className="flex items-center justify-between">
+          <p className={EYEBROW_CLASSNAME}>Plan</p>
+          <ProfileLink />
+        </div>
         <NoActivePlanState />
       </div>
     );
@@ -34,7 +41,18 @@ export default async function PlanPage() {
 
   return (
     <div className="flex flex-1 flex-col px-5 pt-8">
-      <p className={EYEBROW_CLASSNAME}>Plan</p>
+      <div className="flex items-center justify-between">
+        <p className={EYEBROW_CLASSNAME}>Plan</p>
+        <div className="flex items-center gap-1">
+          <Link
+            href="/plan/edit"
+            className={`inline-flex min-h-11 items-center px-2 font-mono text-xs tracking-widest text-muted-foreground uppercase transition-colors duration-150 hover:text-foreground ${FOCUS_RING_CLASSNAME} focus-visible:outline-primary`}
+          >
+            Editar
+          </Link>
+          <ProfileLink />
+        </div>
+      </div>
       {items.length === 0 ? (
         <EmptyPlanState />
       ) : (

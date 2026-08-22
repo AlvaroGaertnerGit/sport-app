@@ -1,4 +1,5 @@
 import { getCurrentProfile, requireUser } from "@/lib/auth/dal";
+import { ProfileLink } from "@/components/app-shell/profile-link";
 import { EYEBROW_CLASSNAME } from "@/components/ui/typography";
 import { getRoutineExerciseCount, getTodayRecommendation } from "@/lib/domain";
 
@@ -29,6 +30,7 @@ export default async function TodayPage() {
     <div className="flex flex-1 flex-col px-5 pt-8">
       <div className={`flex items-center justify-between ${EYEBROW_CLASSNAME}`}>
         <span>{greeting}</span>
+        <ProfileLink />
       </div>
       <p className={`mt-8 ${EYEBROW_CLASSNAME}`}>¿Qué toca hoy?</p>
 

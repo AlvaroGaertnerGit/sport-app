@@ -46,12 +46,21 @@ export async function logSetAction(
   const sessionId = String(formData.get("sessionId") ?? "");
   const exerciseId = String(formData.get("exerciseId") ?? "");
   const value = Number(formData.get("value"));
+  // Only present for weighted exercises (a second stepper posts this field
+  // alongside "value") -- logSet() re-derives server-side whether it
+  // actually applies to this routine_exercise, never trusting its mere
+  // presence here.
+  const rawWeight = formData.get("weightKg");
+  const weightKg = rawWeight != null && rawWeight !== "" ? Number(rawWeight) : undefined;
 
   if (!sessionId || !exerciseId || !Number.isFinite(value) || value < 0) {
     return { error: "Valor no válido.", exerciseId };
   }
+  if (weightKg != null && (!Number.isFinite(weightKg) || weightKg < 0)) {
+    return { error: "Peso no válido.", exerciseId };
+  }
 
-  const error = await runMutation("logSetAction", () => logSet(user.id, sessionId, exerciseId, value));
+  const error = await runMutation("logSetAction", () => logSet(user.id, sessionId, exerciseId, value, weightKg));
 
   revalidatePath(`/workout/${sessionId}`);
 

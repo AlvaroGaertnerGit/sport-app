@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 
 import { FOCUS_RING_CLASSNAME } from "@/components/ui/button";
 
@@ -12,31 +13,41 @@ const TAB_CLASSNAME =
  * underline dot, the workout ProgressBar). Plain links: switching tabs is
  * a normal navigation, no client JS needed.
  */
-export function HistoryTabs({ current }: { current: "progress" | "sessions" }) {
+export function HistoryTabs({
+  current,
+  trailing,
+}: {
+  current: "progress" | "sessions";
+  /** e.g. ProfileLink -- rendered inside this same bordered row so the divider stays full-width instead of only spanning the tabs. */
+  trailing?: ReactNode;
+}) {
   return (
-    <nav aria-label="Historial" className="flex gap-6 border-b border-border">
-      <Link
-        href="/history"
-        aria-current={current === "progress" ? "page" : undefined}
-        className={`${TAB_CLASSNAME} ${
-          current === "progress"
-            ? "border-primary text-foreground"
-            : "border-transparent text-muted-foreground hover:text-foreground"
-        }`}
-      >
-        Resumen
-      </Link>
-      <Link
-        href="/history/sessions"
-        aria-current={current === "sessions" ? "page" : undefined}
-        className={`${TAB_CLASSNAME} ${
-          current === "sessions"
-            ? "border-primary text-foreground"
-            : "border-transparent text-muted-foreground hover:text-foreground"
-        }`}
-      >
-        Sesiones
-      </Link>
+    <nav aria-label="Historial" className="flex items-center justify-between gap-4 border-b border-border">
+      <div className="flex gap-6">
+        <Link
+          href="/history"
+          aria-current={current === "progress" ? "page" : undefined}
+          className={`${TAB_CLASSNAME} ${
+            current === "progress"
+              ? "border-primary text-foreground"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          Resumen
+        </Link>
+        <Link
+          href="/history/sessions"
+          aria-current={current === "sessions" ? "page" : undefined}
+          className={`${TAB_CLASSNAME} ${
+            current === "sessions"
+              ? "border-primary text-foreground"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          Sesiones
+        </Link>
+      </div>
+      {trailing}
     </nav>
   );
 }

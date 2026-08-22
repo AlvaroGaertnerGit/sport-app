@@ -17,6 +17,7 @@ const PROTECTED_ROUTE_PREFIXES = [
   "/plan",
   "/routines",
   "/profile",
+  "/coach",
 ] as const;
 
 /** Where an authenticated user lands if they try to visit /login again. */

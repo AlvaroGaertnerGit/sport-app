@@ -131,14 +131,57 @@ export type TopExerciseStat = {
 export type PersonalBestStat = {
   exerciseId: string
   name: string
-  targetType: "reps" | "duration"
-  /** Best single-set value: reps for a reps exercise, seconds for a duration exercise — never mixed. */
+  targetType: "reps" | "duration" | "weight"
+  /** Best single-set value: reps for a reps exercise, seconds for a duration exercise, kg for a weighted exercise — never mixed. */
   bestValue: number
+  /** Only set when targetType is "weight" — the reps performed at that heaviest logged set (e.g. "80 kg x 5"). */
+  repsAtBestWeight?: number
 }
 
 export type ActivityBucket = {
   label: string
   active: boolean
+}
+
+/**
+ * One exercise the Training Progression Engine considers `progress` or
+ * `complete` right now, scoped to the user's active plan — shared verbatim
+ * by Progress's "Mejorando" and Coach (`selectImprovingHighlights` in
+ * progression.ts is the one place this is built, so the two can never
+ * disagree). `delta` is pre-formatted ("+2 REPS", "+2.5 KG", "+5S") via
+ * `describeProgressionDelta` — never a raw number a component would have
+ * to unit-label itself.
+ */
+export type ExerciseHighlight = {
+  exerciseId: string
+  exerciseName: string
+  routineName: string
+  delta: string
+}
+
+/** One exercise the engine says `maintain` on — Coach's "a tener en cuenta": what to aim for next time, not yet a win. */
+export type CoachExerciseNote = {
+  exerciseId: string
+  exerciseName: string
+  routineName: string
+  /** Formatted via `summarizeNextTarget` — the exact same string Workout itself would show. */
+  nextTarget: string
+}
+
+/**
+ * The first deterministic Coach: composed entirely from `getProgressSummary`
+ * and `getActivePlanExerciseProgressions` — no new metric invented, no AI.
+ * `hasData` mirrors `ProgressSummary.hasData` (no session at all yet).
+ */
+export type CoachSummary = {
+  hasData: boolean
+  workoutsCompleted: number
+  sessionsPerWeek: number | null
+  currentStreakDays: number
+  improving: ExerciseHighlight[]
+  maintaining: CoachExerciseNote[]
+  /** Exercises in the active plan the engine can't say anything about yet (0 or 1 completed sessions) — named, not silently dropped. */
+  insufficientData: { exerciseId: string; exerciseName: string; routineName: string }[]
 }
 
 export type ProgressSummary = {
@@ -154,6 +197,8 @@ export type ProgressSummary = {
   totalReps: number
   /** Sum of set_logs.duration_seconds over completed sessions, duration-type sets only. */
   totalDurationSeconds: number
+  /** Sum of weight_kg * reps over completed sessions, only for sets that logged both — never blended with duration or bodyweight reps. */
+  totalVolumeKg: number
   /** Distinct UTC calendar days with a session of ANY status (including in_progress) — showing up counts. */
   activeDays: number
   currentStreakDays: number
@@ -179,6 +224,7 @@ export type RoutineDetailExercise = {
   targetRepsMin: number | null
   targetRepsMax: number | null
   targetDurationSeconds: number | null
+  targetWeightKg: number | null
 }
 
 export type RoutineDetail = {
@@ -186,4 +232,34 @@ export type RoutineDetail = {
   name: string
   sportName: string | null
   exercises: RoutineDetailExercise[]
+}
+
+/** One row in Plan's "add routine"/"create plan" picker -- no exercise detail, just enough to pick one. */
+export type RoutineSummary = {
+  routineId: string
+  name: string
+  sportName: string | null
+  exerciseCount: number
+}
+
+/** One row in the exercise search picker (`searchExercises`) -- the shared, unowned catalog, never a per-routine or per-user list. */
+export type ExerciseSearchResult = {
+  exerciseId: string
+  name: string
+  primaryMuscles: string[]
+}
+
+/**
+ * What `addExerciseToRoutine` needs beyond the exercise id -- the routine's
+ * *own* target for it, same shape `routine_exercises` itself requires
+ * (target_type coherence, sets > 0, ...). Never defaulted silently: the
+ * caller (the target-config step in the UI) always supplies it explicitly.
+ */
+export type NewRoutineExerciseTarget = {
+  targetType: "reps" | "duration"
+  targetSets: number
+  targetRepsMin: number | null
+  targetRepsMax: number | null
+  targetDurationSeconds: number | null
+  targetWeightKg: number | null
 }

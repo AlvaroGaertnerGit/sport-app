@@ -4,9 +4,10 @@ import Link from "next/link";
 import { useActionState, useEffect, useRef, useState } from "react";
 
 import { Button, ButtonArrow, FOCUS_RING_CLASSNAME } from "@/components/ui/button";
+import { ConfirmPanel } from "@/components/ui/confirm-panel";
 import { ErrorText } from "@/components/ui/error-text";
 import { isExerciseSetsDone } from "@/lib/domain/exercise-progress";
-import type { WorkoutSessionDetail } from "@/lib/domain";
+import type { ExerciseProgression, WorkoutSessionDetail } from "@/lib/domain";
 
 import {
   abandonSessionAction,
@@ -15,7 +16,6 @@ import {
   type LogSetActionState,
   type WorkoutActionState,
 } from "./actions";
-import { ConfirmPanel } from "./confirm-panel";
 import { ExercisePanel, type ExercisePanelPhase } from "./exercise-panel";
 import { ProgressBar } from "./progress-bar";
 import { DEFAULT_REST_SECONDS, useRestTimer } from "./use-rest-timer";
@@ -37,7 +37,14 @@ type ConfirmKind = "finish" | "skip" | "abandon" | null;
  * fires, so the session stays `in_progress` exactly as it was. Only the
  * explicit, confirmed "Abandonar" button below ever sets `abandoned`.
  */
-export function WorkoutSessionView({ session }: { session: WorkoutSessionDetail }) {
+export function WorkoutSessionView({
+  session,
+  progressions,
+}: {
+  session: WorkoutSessionDetail;
+  /** Keyed by exerciseId -- the Training Progression Engine's read-only "what to aim for next" per exercise (src/lib/domain/progression.ts). */
+  progressions: Map<string, ExerciseProgression>;
+}) {
   const [viewIndex, setViewIndex] = useState(session.currentExerciseIndex ?? 0);
   const [confirming, setConfirming] = useState<ConfirmKind>(null);
 
@@ -145,6 +152,7 @@ export function WorkoutSessionView({ session }: { session: WorkoutSessionDetail 
           <ExercisePanel
             sessionId={session.sessionId}
             exercise={exercise}
+            progression={progressions.get(exercise.exerciseId) ?? null}
             phase={panelPhase}
             isLastExercise={isLastExercise}
             restRemainingSeconds={restTimer.remainingSeconds}

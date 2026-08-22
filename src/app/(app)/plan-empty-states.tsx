@@ -1,11 +1,10 @@
-import { Button } from "@/components/ui/button";
+import { ButtonArrow, ButtonLink } from "@/components/ui/button";
 
 /**
  * "You don't have an active plan yet" — shared by Today (`no_plan` case of
  * `getTodayRecommendation()`) and Plan (`getActivePlan()` returning null).
- * No plan-creation flow exists yet, so the CTA stays honestly disabled
- * rather than faking one — see the brief's own rule against inventing a
- * fake flow.
+ * The CTA is a real entry point into `/plan/new` now that plan creation
+ * exists.
  */
 export function NoActivePlanState() {
   return (
@@ -14,10 +13,9 @@ export function NoActivePlanState() {
         <h2 className="text-2xl font-bold text-foreground">Todavía no tienes un plan</h2>
         <p className="text-sm text-muted-foreground">Crea un plan de entrenamiento para empezar.</p>
       </div>
-      <div className="flex flex-col gap-2">
-        <Button disabled>Crear plan</Button>
-        <p className="text-center text-xs text-muted-foreground">Disponible próximamente</p>
-      </div>
+      <ButtonLink href="/plan/new">
+        Crear plan <ButtonArrow />
+      </ButtonLink>
     </section>
   );
 }
