@@ -6,21 +6,28 @@ import { LANDING_CONTAINER_CLASSNAME, LANDING_SECTION_CLASSNAME } from "./layout
 import { Reveal } from "./motion/reveal";
 
 /**
- * Landing v2 phase: these three tiers and their exact prices are the given
- * commercial spec for this version of the landing, not something derived
- * or invented here -- FREE 0€/mes, PRO 8,99€/mes, PRO ANUAL 69,99€/año.
- * Savings check (so this stays honest, not just asserted): 8.99 × 12 =
- * 107.88; (107.88 − 69.99) / 107.88 ≈ 35.1% → "Ahorra 35%" is a real,
- * unrounded-away number, not marketing rounding.
+ * Pricing v3 (this replaces v2's 8,99€/69,99€ entirely, not an addition to
+ * it): FREE 0€/mes, PRO 2,99€/mes, PRO ANUAL 24,99€/año -- exact figures
+ * given, not derived here. Savings check (so "Ahorra 30%" stays a real
+ * number, not marketing rounding): 2.99 × 12 = 35.88; (35.88 − 24.99) /
+ * 35.88 ≈ 30.35% → "Ahorra 30%" is accurate, not rounded up from a lower
+ * true value. 24.99 / 12 ≈ 2.0825 → "≈ 2,08 €/mes" likewise exact.
  *
- * No billing exists (brief: no Stripe/checkout/subscriptions this phase).
- * Pro's CTA is therefore inert by construction -- `<span>`, not a link or
- * button with an onClick -- rather than a real control that goes nowhere;
- * that's the difference between "not implemented yet" and "looks broken."
+ * The real per-request OpenAI cost that justified going this low is an
+ * internal pricing input, not landing copy -- it never appears here or
+ * anywhere user-facing, and no cost/token/margin figure is hardcoded
+ * anywhere in the app.
+ *
+ * No billing exists (no Stripe/checkout/subscriptions this phase). Pro's
+ * CTA is therefore inert by construction -- `<span>`, not a link or button
+ * with an onClick -- rather than a real control that goes nowhere; that's
+ * the difference between "not implemented yet" and "looks broken."
  */
 const FREE_FEATURES = [
-  "Planes y rutinas ilimitados.",
+  "Crear y editar planes y rutinas.",
   "Catálogo y búsqueda de ejercicios.",
+  "Añadir, quitar y reordenar ejercicios.",
+  "Editar series, reps, peso y duración.",
   "Workout completo con Smart Targets.",
   "Timers de ejercicio y descanso.",
   "Historial, calendario y progreso.",
@@ -29,24 +36,29 @@ const FREE_FEATURES = [
 
 const PRO_FEATURES = [
   "Todo lo de Free.",
-  "Coach IA — conversación con SCOPE.",
-  "Crear y modificar rutinas con el Coach.",
-  "Sustituir y reordenar ejercicios con el Coach.",
+  "SCOPE incluido — Coach IA completo.",
+  "Análisis inteligente de tu entrenamiento.",
+  "Crear y modificar rutinas con SCOPE.",
+  "Añadir, sustituir y reordenar ejercicios con SCOPE.",
+  "Modificar series y objetivos con SCOPE.",
   "Recomendaciones personalizadas.",
 ] as const;
 
 const COMPARISON_ROWS = [
-  { label: "Planes y rutinas", free: true, pro: true },
+  { label: "Planes", free: true, pro: true },
+  { label: "Rutinas", free: true, pro: true },
+  { label: "Catálogo de ejercicios", free: true, pro: true },
   { label: "Workout", free: true, pro: true },
   { label: "Smart Targets", free: true, pro: true },
+  { label: "Timers", free: true, pro: true },
   { label: "Historial", free: true, pro: true },
   { label: "Calendario", free: true, pro: true },
   { label: "Progress", free: true, pro: true },
-  { label: "Timers", free: true, pro: true },
-  { label: "Coach IA", free: false, pro: true },
+  { label: "Coach IA SCOPE", free: false, pro: true },
   { label: "Crear rutinas con SCOPE", free: false, pro: true },
   { label: "Modificar rutinas con SCOPE", free: false, pro: true },
   { label: "Análisis inteligente", free: false, pro: true },
+  { label: "Recomendaciones personalizadas", free: false, pro: true },
 ] as const;
 
 function Check({ on }: { on: boolean }) {
@@ -71,7 +83,7 @@ export function SectionPricing() {
           </h2>
           <p className="max-w-lg text-base leading-relaxed text-muted-foreground">
             Sport Coach es una aplicación de entrenamiento completa sin pagar nada. Pro añade a
-            SCOPE como coach real dentro de la app.
+            SCOPE como coach real dentro de la app, por menos de 3 €.
           </p>
         </Reveal>
 
@@ -82,6 +94,9 @@ export function SectionPricing() {
             <div className="flex flex-col gap-1">
               <h3 className="text-xl font-bold text-foreground uppercase">Free</h3>
               <p className="text-sm text-muted-foreground">Todo lo necesario para entrenar.</p>
+              <p className="text-sm text-muted-foreground">
+                Construye tu plan, entrena, registra tus series y entiende tu progreso.
+              </p>
             </div>
             <div>
               <span className={`${DISPLAY_HEADING_CLASSNAME} text-4xl`}>0 €</span>
@@ -107,9 +122,12 @@ export function SectionPricing() {
             <div className="flex flex-col gap-1">
               <h3 className="text-xl font-bold text-foreground uppercase">Pro</h3>
               <p className="text-sm text-muted-foreground">Entrena con SCOPE a tu lado.</p>
+              <p className="text-sm text-muted-foreground">
+                Convierte tus datos de entrenamiento en decisiones más inteligentes.
+              </p>
             </div>
             <div>
-              <span className={`${DISPLAY_HEADING_CLASSNAME} text-4xl`}>8,99 €</span>
+              <span className={`${DISPLAY_HEADING_CLASSNAME} text-4xl`}>2,99 €</span>
               <span className="ml-1 font-mono text-xs tracking-widest text-muted-foreground uppercase">
                 /mes
               </span>
@@ -138,18 +156,19 @@ export function SectionPricing() {
             </span>
             <div className="flex flex-col gap-1">
               <h3 className="text-xl font-bold text-foreground uppercase">Pro anual</h3>
-              <p className="text-sm text-muted-foreground">Todo Pro, al mejor precio.</p>
+              <p className="text-sm text-muted-foreground">El mejor valor.</p>
+              <p className="text-sm text-muted-foreground">Todo Pro por 24,99 € al año.</p>
             </div>
             <div className="flex flex-col gap-1">
               <div>
-                <span className={`${DISPLAY_HEADING_CLASSNAME} text-4xl`}>69,99 €</span>
+                <span className={`${DISPLAY_HEADING_CLASSNAME} text-4xl`}>24,99 €</span>
                 <span className="ml-1 font-mono text-xs tracking-widest text-muted-foreground uppercase">
                   /año
                 </span>
               </div>
               <p className="font-mono text-xs tracking-wide text-muted-foreground">
-                ≈ 5,83 €/mes ·{" "}
-                <span className="font-bold text-primary">Ahorra 35%</span>
+                ≈ 2,08 €/mes ·{" "}
+                <span className="font-bold text-primary">Ahorra 30%</span>
               </p>
             </div>
             <ul className="flex flex-1 flex-col gap-2">
@@ -222,7 +241,7 @@ export function SectionPricing() {
         </Reveal>
 
         <p className="mt-8 max-w-lg text-xs text-muted-foreground">
-          El uso del Coach IA está sujeto a un uso razonable.
+          El uso de SCOPE está sujeto a un uso razonable.
         </p>
       </div>
     </section>
