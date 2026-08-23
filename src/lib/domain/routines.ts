@@ -138,6 +138,45 @@ export async function getUserRoutines(userId: string): Promise<RoutineSummary[]>
 }
 
 /**
+ * Just the exercise names (ordered) for a known set of routines -- the
+ * Coach's "¿está bien distribuido mi plan?" no longer calls `getRoutineDetail`
+ * once per plan item (N+1: 2 queries × N routines, most of it discarded --
+ * `sportName` and every target field were fetched and thrown away). One
+ * query for every routine at once, same `routines!inner(user_id)`
+ * defense-in-depth shape `getUserRoutines` already uses above -- ownership
+ * is re-checked here regardless of whether `routineIds` was already sourced
+ * from an owned plan, matching this file's own convention (RLS enforces it
+ * independently either way).
+ */
+export async function getRoutineExerciseNames(
+  userId: string,
+  routineIds: readonly string[],
+): Promise<Map<string, { order: number; exerciseName: string }[]>> {
+  const result = new Map<string, { order: number; exerciseName: string }[]>();
+  if (routineIds.length === 0) {
+    return result;
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("routine_exercises")
+    .select("routine_id, order, exercises(name), routines!inner(user_id)")
+    .in("routine_id", routineIds)
+    .eq("routines.user_id", userId)
+    .order("order", { ascending: true });
+  if (error) {
+    throw new Error(`getRoutineExerciseNames: ${error.message}`);
+  }
+
+  for (const row of data ?? []) {
+    const list = result.get(row.routine_id) ?? [];
+    list.push({ order: row.order, exerciseName: row.exercises?.name ?? "Ejercicio" });
+    result.set(row.routine_id, list);
+  }
+  return result;
+}
+
+/**
  * Appends an exercise (found via `searchExercises`) to a routine, at the
  * next `order` slot -- same "verify ownership, then `max(order)+1`" shape
  * `addRoutineToPlan` already uses for `plan_items`. `target` is never
@@ -407,19 +446,21 @@ export async function reorderRoutineExercise(
 }
 
 /**
- * Sets-only, deliberately: this is the one target field the Coach IA write
- * phase actually asks for ("pon 4 series de X"). Reps/duration/weight
- * editing is real domain capability (the columns and CHECKs already
- * support it) but adding it now would invent scope the brief never asked
- * for -- see CLAUDE.md §16. Extend the signature to a partial target
- * object if a future phase needs more, rather than adding a second
- * function.
+ * Full target replacement -- was sets-only (Coach IA write phase only ever
+ * asked for "pon 4 series de X"); Plan Editor V2 needs series/reps/weight/
+ * duration all editable, and the columns/CHECKs already supported it (see
+ * this function's own prior doc comment, which anticipated exactly this
+ * extension rather than a second function). The Coach IA write path
+ * (`action-execution.ts`) still only ever *changes* `targetSets` -- it just
+ * now passes the exercise's full current target alongside it, composed
+ * server-side from already-resolved data, never from anything the LLM sent
+ * -- so this widening adds no new AI capability (CLAUDE.md §16).
  */
 export async function updateRoutineExerciseTarget(
   userId: string,
   routineId: string,
   exerciseId: string,
-  targetSets: number,
+  target: NewRoutineExerciseTarget,
 ): Promise<void> {
   const supabase = await createClient();
 
@@ -438,7 +479,14 @@ export async function updateRoutineExerciseTarget(
 
   const { data, error } = await supabase
     .from("routine_exercises")
-    .update({ target_sets: targetSets })
+    .update({
+      target_sets: target.targetSets,
+      target_type: target.targetType,
+      target_reps_min: target.targetRepsMin,
+      target_reps_max: target.targetRepsMax,
+      target_duration_seconds: target.targetDurationSeconds,
+      target_weight_kg: target.targetWeightKg,
+    })
     .eq("routine_id", routineId)
     .eq("exercise_id", exerciseId)
     .select("id")

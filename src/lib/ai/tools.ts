@@ -1,11 +1,12 @@
 import "server-only";
 
+import { getCoachSummary } from "@/lib/domain/coach";
 import { searchExercises } from "@/lib/domain/exercises";
 import { getActivePlan, getPlanItems } from "@/lib/domain/plans";
 import { getProgressSummary } from "@/lib/domain/progress";
 import { getActivePlanExerciseProgressions, getRoutineExerciseProgressions } from "@/lib/domain/progression";
-import { getRoutineDetail } from "@/lib/domain/routines";
-import { getSessionHistory } from "@/lib/domain/history";
+import { getRoutineDetail, getRoutineExerciseNames } from "@/lib/domain/routines";
+import { getRecentSessionsForMuscleGroups, getSessionHistory } from "@/lib/domain/history";
 import { getTodayRecommendation } from "@/lib/domain/today";
 import type { ProgressionExerciseInput } from "@/lib/domain/progression";
 
@@ -16,18 +17,39 @@ import type { RawRoutineDraft, RoutineDraft } from "./routine-draft";
 import type { CoachActionDraft, RawCoachAction } from "./action-draft";
 
 /**
- * Read-only tools (brief §11-18) plus one structured-output action tool
- * (`propose_routine_draft`, brief §30-38) -- all six read tools call an
- * *existing* domain function and shape its result into FACTS (brief §9):
- * plain data, no generated prose. `propose_routine_draft` is the one
- * exception that has a side effect worth surfacing to the UI (the resolved
- * Draft itself), reported back via `CoachToolResult.sideEffect` rather than
+ * Read-only tools plus two structured-output tools with a side effect
+ * (`propose_routine_draft`, `propose_action`) -- every read tool calls an
+ * *existing* domain function and shapes its result into FACTS: plain data,
+ * no generated prose, no recalculated numbers. `getProgressOverview` and
+ * `getRecentTrainingForMuscleGroup` (Training Intelligence phase) are no
+ * exception -- the first wraps `getCoachSummary` verbatim (the same read
+ * the Coach page's own header uses), the second wraps a single new,
+ * narrowly-scoped domain read (`getRecentSessionsForMuscleGroups`) rather
+ * than a second progression/frequency calculation. The two propose_* tools
+ * are the only ones with a side effect worth surfacing to the UI (a Draft
+ * to review), reported back via `CoachToolResult.sideEffect` rather than
  * ever writing to Supabase -- resolution and validation only.
  */
 
 const FIXED_PERIOD = "30d" as const;
 const DEFAULT_SESSIONS_LIMIT = 10;
 const MAX_SESSIONS_LIMIT = 20;
+
+/** The exercise catalog's real, closed `primary_muscles` taxonomy (confirmed against live data) -- the only values `getRecentTrainingForMuscleGroup` can ever match against. Mapping a user's own word ("espalda", "piernas") to one or more of these is the model's job (see the tool's own description); this list exists so the model can only ever pass a real value, never invent one. */
+const MUSCLE_GROUPS = [
+  "back",
+  "biceps",
+  "calves",
+  "chest",
+  "core",
+  "forearms",
+  "glutes",
+  "hamstrings",
+  "lats",
+  "quadriceps",
+  "shoulders",
+  "triceps",
+] as const;
 
 export type CoachToolResult = {
   /** JSON string -- becomes the `function_call_output.output` sent back to the model. */
@@ -110,22 +132,27 @@ async function toolGetRecentSessions(userId: string, args: { limit?: number }): 
   );
 }
 
+/**
+ * Was N+1: one `getRoutineDetail` call (2 queries, plus `sportName` and
+ * every target field fetched and discarded) per plan item -- 12+ queries
+ * for a 6-item plan. `getRoutineExerciseNames` fetches every distinct
+ * routine's exercise names in one query regardless of plan size (and a
+ * routine repeated in the rotation, e.g. "Piernas" twice, is only fetched
+ * once) -- 3 queries total no matter how many routines the plan has.
+ */
 async function toolGetCurrentPlan(userId: string): Promise<CoachToolResult> {
   const plan = await getActivePlan(userId);
   if (!plan) {
     return ok({ hasActivePlan: false });
   }
   const items = await getPlanItems(userId, plan.id);
-  const routines = await Promise.all(
-    items.map(async (item) => {
-      const detail = await getRoutineDetail(userId, item.routineId);
-      return {
-        order: item.order,
-        routineName: item.routineName,
-        exerciseNames: detail?.exercises.map((e) => e.exerciseName) ?? [],
-      };
-    }),
-  );
+  const distinctRoutineIds = [...new Set(items.map((item) => item.routineId))];
+  const exerciseNamesByRoutine = await getRoutineExerciseNames(userId, distinctRoutineIds);
+  const routines = items.map((item) => ({
+    order: item.order,
+    routineName: item.routineName,
+    exerciseNames: (exerciseNamesByRoutine.get(item.routineId) ?? []).map((e) => e.exerciseName),
+  }));
   return ok({ hasActivePlan: true, planName: plan.name, routines });
 }
 
@@ -171,6 +198,59 @@ async function toolGetTodayWorkout(userId: string): Promise<CoachToolResult> {
       targetDurationSeconds: e.targetDurationSeconds,
       targetWeightKg: e.targetWeightKg,
       recommendedNext: progressions.get(e.exerciseId)?.next ?? null,
+      // status/reason expose *why* recommendedNext equals or differs from
+      // the routine's own target -- without these the model can't tell
+      // "the engine says maintain" apart from "there isn't enough history
+      // yet", even though both cases return the same recommendedNext value.
+      progressionStatus: progressions.get(e.exerciseId)?.status ?? null,
+      progressionReason: progressions.get(e.exerciseId)?.reason ?? null,
+    })),
+  });
+}
+
+/**
+ * Wraps `getCoachSummary` unchanged -- the exact same read the Coach page's
+ * own deterministic header uses (brief §19/§29: reuse, never a second
+ * calculation). Baseline context (context.ts) deliberately only carries the
+ * *counts* of improving/maintaining; this tool is the on-demand call for
+ * the actual named exercises, so a question like "¿qué estoy mejorando?"
+ * doesn't require inflating every turn's context with a list most turns
+ * never need.
+ */
+async function toolGetProgressOverview(userId: string): Promise<CoachToolResult> {
+  const summary = await getCoachSummary(userId);
+  return ok({
+    hasData: summary.hasData,
+    workoutsCompleted30d: summary.workoutsCompleted,
+    sessionsPerWeek: summary.sessionsPerWeek,
+    currentStreakDays: summary.currentStreakDays,
+    improving: summary.improving,
+    maintaining: summary.maintaining,
+    insufficientData: summary.insufficientData,
+  });
+}
+
+/** `muscleGroups` must already be real taxonomy values -- resolved by `resolveMuscleGroups`, never trusted raw from the model (mirrors every other name-resolution boundary in this codebase). */
+function resolveMuscleGroups(requested: readonly string[]): string[] {
+  const valid = new Set<string>(MUSCLE_GROUPS);
+  return requested.filter((m): m is (typeof MUSCLE_GROUPS)[number] => valid.has(m));
+}
+
+async function toolGetRecentTrainingForMuscleGroup(userId: string, args: { muscleGroups: string[] }): Promise<CoachToolResult> {
+  const muscleGroups = resolveMuscleGroups(args.muscleGroups ?? []);
+  if (muscleGroups.length === 0) {
+    return ok({ found: false, reason: "No se ha reconocido ningún grupo muscular válido en la petición." });
+  }
+
+  const sessions = await getRecentSessionsForMuscleGroups(userId, muscleGroups, DEFAULT_SESSIONS_LIMIT);
+  return ok({
+    found: true,
+    muscleGroups,
+    sessions: sessions.map((s) => ({
+      startedAt: s.startedAt,
+      routineName: s.routineName,
+      status: s.status,
+      matchedExerciseNames: s.matchedExerciseNames,
     })),
   });
 }
@@ -333,8 +413,31 @@ export const COACH_TOOLS: CoachToolDefinition[] = [
   {
     type: "function",
     name: "getTodayWorkout",
-    description: "Qué le toca entrenar hoy al usuario según su plan y rotación, con los objetivos recomendados por el Progression Engine.",
+    description:
+      "Qué le toca entrenar hoy al usuario según su plan y rotación, con los objetivos recomendados por el Progression Engine. Cada ejercicio incluye progressionStatus ('maintain', 'progress', 'complete' o 'insufficient_data') y progressionReason -- usar ambos para explicar el porqué; recommendedNext puede ser igual al objetivo actual tanto porque el motor recomienda mantenerlo como porque todavía no hay datos suficientes, y esos dos casos no son lo mismo.",
     parameters: { type: "object", properties: {}, required: [], additionalProperties: false },
+    strict: true,
+  },
+  {
+    type: "function",
+    name: "getProgressOverview",
+    description:
+      "Qué ejercicios del plan activo del usuario están mejorando, cuáles se están manteniendo, y cuáles no tienen datos suficientes todavía -- calculado por el Progression Engine, nunca inventado. Usar para preguntas como '¿qué estoy mejorando?' o '¿cómo voy en general?'.",
+    parameters: { type: "object", properties: {}, required: [], additionalProperties: false },
+    strict: true,
+  },
+  {
+    type: "function",
+    name: "getRecentTrainingForMuscleGroup",
+    description: `Sesiones recientes del usuario que entrenaron uno o más grupos musculares concretos, con qué ejercicios exactamente. Usar para preguntas como '¿cuándo entrené espalda?' o '¿he hecho piernas esta semana?'. muscleGroups debe ser uno o más valores reales del catálogo (nunca inventar uno): ${MUSCLE_GROUPS.join(", ")}. Traducir la palabra del usuario a estos valores -- por ejemplo espalda -> back y lats; pecho -> chest; hombros -> shoulders; piernas -> quadriceps, hamstrings, glutes y calves; brazos -> biceps, triceps y forearms; core/abdomen -> core.`,
+    parameters: {
+      type: "object",
+      properties: {
+        muscleGroups: { type: "array", items: { type: "string", enum: [...MUSCLE_GROUPS] } },
+      },
+      required: ["muscleGroups"],
+      additionalProperties: false,
+    },
     strict: true,
   },
   {
@@ -362,7 +465,7 @@ export const COACH_TOOLS: CoachToolDefinition[] = [
     type: "function",
     name: "propose_action",
     description:
-      "Propone uno o varios cambios sobre una rutina o plan YA EXISTENTES (añadir/quitar/sustituir/reordenar un ejercicio, cambiar sus series, o añadir una rutina al plan activo) para que el usuario los revise y confirme. NO escribe nada en la base de datos -- solo produce una propuesta. NUNCA usar para crear una rutina nueva (usar propose_routine_draft para eso). Usar nombres reales tal como los dice el usuario -- el servidor los resuelve contra los datos reales y pedirá aclaración si hay ambigüedad.",
+      "Propone uno o varios cambios sobre una rutina o plan YA EXISTENTES (añadir/quitar/sustituir/reordenar un ejercicio, cambiar sus series, o añadir una rutina al plan activo) para que el usuario los revise y confirme. NO escribe nada en la base de datos -- solo produce una propuesta. NUNCA usar para crear una rutina nueva (usar propose_routine_draft para eso). Usar nombres reales tal como los dice el usuario -- el servidor los resuelve contra los datos reales y pedirá aclaración si hay ambigüedad. update_exercise_target SOLO cambia el número de series (targetSets) -- nunca el peso, las repeticiones ni la duración; no lo uses para esos casos, dile al usuario honestamente que ese cambio no está soportado todavía.",
     parameters: PROPOSE_ACTION_SCHEMA,
     strict: true,
   },
@@ -382,6 +485,10 @@ export async function executeCoachTool(userId: string, name: string, argsJson: s
       return toolGetCurrentPlan(userId);
     case "getTodayWorkout":
       return toolGetTodayWorkout(userId);
+    case "getProgressOverview":
+      return toolGetProgressOverview(userId);
+    case "getRecentTrainingForMuscleGroup":
+      return toolGetRecentTrainingForMuscleGroup(userId, args);
     case "searchExercises":
       return toolSearchExercises(args);
     case "propose_routine_draft":

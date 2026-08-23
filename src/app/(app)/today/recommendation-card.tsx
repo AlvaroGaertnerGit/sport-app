@@ -83,6 +83,9 @@ export function TodayRecommendationCard({
         <section role="alert" className="mt-10 flex animate-fade-in flex-col gap-3 border-l-2 border-destructive pl-4">
           <h2 className="text-2xl font-bold text-foreground">No hemos podido cargar tu entrenamiento</h2>
           <p className="text-sm text-muted-foreground">Inténtalo de nuevo en unos minutos.</p>
+          <ButtonLink href="/today" variant="ghost" className="mt-2 w-fit px-0">
+            Reintentar <ButtonArrow />
+          </ButtonLink>
         </section>
       );
 

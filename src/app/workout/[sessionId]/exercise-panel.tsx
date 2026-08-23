@@ -1,10 +1,12 @@
 import Image from "next/image";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Button, ButtonArrow, FOCUS_RING_CLASSNAME } from "@/components/ui/button";
 import { CheckBadge } from "@/components/ui/check-badge";
 import { ErrorText } from "@/components/ui/error-text";
 import { DISPLAY_HEADING_CLASSNAME, EYEBROW_CLASSNAME } from "@/components/ui/typography";
+import { unlockAudioCue } from "@/lib/audio-cue";
+import type { ExerciseTimerPhase } from "@/lib/exercise-timer";
 import { formatRestClock } from "@/lib/rest-timer";
 import {
   formatExerciseTarget as formatTarget,
@@ -198,6 +200,12 @@ function LoggingContent({
   logAction,
   logState,
   logPending,
+  durationTimerPhase,
+  durationTimerRemainingSeconds,
+  onStartDurationTimer,
+  onPauseDurationTimer,
+  onResumeDurationTimer,
+  onRestartDurationTimer,
 }: {
   sessionId: string;
   exercise: WorkoutSessionExercise;
@@ -208,11 +216,33 @@ function LoggingContent({
   logAction: FormActionDispatch;
   logState: LogSetActionState;
   logPending: boolean;
+  durationTimerPhase: ExerciseTimerPhase;
+  durationTimerRemainingSeconds: number;
+  onStartDurationTimer: () => void;
+  onPauseDurationTimer: () => void;
+  onResumeDurationTimer: () => void;
+  onRestartDurationTimer: () => void;
 }) {
+  // Only for a timed exercise's active set -- `targetDurationSeconds` is
+  // null for a reps-based exercise, and this never renders once read-only
+  // (every set already logged; there's nothing left to time).
+  const showDurationTimer = !readOnly && exercise.targetType === "duration" && (exercise.targetDurationSeconds ?? 0) > 0;
+
   return (
     <div className="flex flex-col gap-6">
       <ExerciseHeader exercise={exercise} nextTarget={readOnly ? null : nextTarget} />
       <ExerciseMedia exercise={exercise} />
+      {showDurationTimer && (
+        <DurationTimerBlock
+          targetSeconds={exercise.targetDurationSeconds ?? 0}
+          phase={durationTimerPhase}
+          remainingSeconds={durationTimerRemainingSeconds}
+          onStart={onStartDurationTimer}
+          onPause={onPauseDurationTimer}
+          onResume={onResumeDurationTimer}
+          onRestart={onRestartDurationTimer}
+        />
+      )}
       {readOnly ? (
         <>
           <SetRows exercise={exercise} progression={null} editable={false} />
@@ -226,7 +256,11 @@ function LoggingContent({
           <input type="hidden" name="exerciseId" value={exercise.exerciseId} />
           <SetRows key={exercise.exerciseId} exercise={exercise} progression={progression} editable />
           {logState?.error && <ErrorText>{logState.error}</ErrorText>}
-          <Button type="submit" disabled={logPending}>
+          {/* onClick alongside the real form submission, never preventing it --
+              this is the one gesture guaranteed to happen right before the rest
+              timer auto-starts, so it's the most useful place to unlock audio
+              (brief §15) even for an exercise with no duration timer of its own. */}
+          <Button type="submit" disabled={logPending} onClick={() => unlockAudioCue()}>
             {logPending ? (
               "Guardando…"
             ) : (
@@ -242,8 +276,15 @@ function LoggingContent({
   );
 }
 
-/** El anillo se drena a medida que pasa el tiempo -- rojo mientras cuenta, ver RestDone* para el estado "listo" en lima. */
-function RestRing({ remainingSeconds, totalSeconds }: { remainingSeconds: number; totalSeconds: number }) {
+/**
+ * El anillo se drena a medida que pasa el tiempo -- rojo mientras cuenta,
+ * ver RestDone* para el estado "listo" en lima. Exported: the single
+ * countdown-ring mechanism the brief asks for, shared verbatim by the
+ * rest timer (below) and the exercise-duration timer (`DurationTimerBlock`)
+ * -- one drawing, two different surrounding blocks/controls, never a
+ * second ring implementation.
+ */
+export function RestRing({ remainingSeconds, totalSeconds }: { remainingSeconds: number; totalSeconds: number }) {
   const ratio = totalSeconds > 0 ? Math.min(1, Math.max(0, remainingSeconds / totalSeconds)) : 0;
   const radius = 88;
   const circumference = 2 * Math.PI * radius;
@@ -266,6 +307,97 @@ function RestRing({ remainingSeconds, totalSeconds }: { remainingSeconds: number
       <span className="font-mono text-5xl font-bold text-foreground tabular-nums">
         {formatRestClock(remainingSeconds)}
       </span>
+    </div>
+  );
+}
+
+/**
+ * The countdown for a `targetType: "duration"` exercise (Plank 45s, etc.)
+ * -- purely additive above the existing `SetRows`/stepper below it (brief
+ * §12/§25: never changes how a set actually gets registered). "Iniciar"
+ * is the one real user gesture this component's own click handlers get,
+ * so audio unlocking (see session-view.tsx) piggybacks on it along with
+ * Pausar/Reanudar/Reiniciar.
+ *
+ * `aria-live` only announces on a phase *change* (start/pause/resume/done),
+ * never the ticking seconds themselves (brief §22: "no anunciar cada
+ * segundo") -- the visible ring still updates every second, only the
+ * screen-reader announcement is throttled to real transitions.
+ */
+function DurationTimerBlock({
+  targetSeconds,
+  phase,
+  remainingSeconds,
+  onStart,
+  onPause,
+  onResume,
+  onRestart,
+}: {
+  targetSeconds: number;
+  phase: ExerciseTimerPhase;
+  remainingSeconds: number;
+  onStart: () => void;
+  onPause: () => void;
+  onResume: () => void;
+  onRestart: () => void;
+}) {
+  const displaySeconds = phase === "idle" ? targetSeconds : remainingSeconds;
+
+  const [announcement, setAnnouncement] = useState("");
+  const prevPhaseRef = useRef<ExerciseTimerPhase>(phase);
+  useEffect(() => {
+    if (prevPhaseRef.current !== phase) {
+      if (phase === "running") {
+        setAnnouncement(prevPhaseRef.current === "paused" ? "Reanudado." : `Iniciado, ${targetSeconds} segundos.`);
+      } else if (phase === "paused") {
+        setAnnouncement(`Pausado, ${remainingSeconds} segundos restantes.`);
+      } else if (phase === "done") {
+        setAnnouncement("Tiempo terminado.");
+      }
+      prevPhaseRef.current = phase;
+    }
+  }, [phase, remainingSeconds, targetSeconds]);
+
+  return (
+    <div className="flex flex-col items-center gap-6 border-b border-border pb-6 text-center">
+      <RestRing remainingSeconds={displaySeconds} totalSeconds={targetSeconds} />
+      <p role="status" aria-live="polite" className="sr-only">
+        {announcement}
+      </p>
+      {phase === "done" && (
+        <p className="font-mono text-sm tracking-widest text-success uppercase">Tiempo terminado — registra la serie abajo</p>
+      )}
+      <div className="flex items-center gap-4">
+        {phase === "idle" && (
+          <Button type="button" onClick={onStart} className="min-h-11 w-auto px-8 text-base">
+            Iniciar
+          </Button>
+        )}
+        {phase === "running" && (
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={onPause}
+            className="min-h-11 w-auto border border-border px-8"
+          >
+            Pausar
+          </Button>
+        )}
+        {phase === "paused" && (
+          <Button type="button" onClick={onResume} className="min-h-11 w-auto px-8 text-base">
+            Reanudar
+          </Button>
+        )}
+        {(phase === "paused" || phase === "done") && (
+          <button
+            type="button"
+            onClick={onRestart}
+            className={`min-h-11 px-2 font-mono text-sm tracking-wide text-muted-foreground uppercase transition duration-150 hover:text-foreground active:scale-95 ${FOCUS_RING_CLASSNAME} focus-visible:outline-primary`}
+          >
+            Reiniciar
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -382,6 +514,12 @@ type ExercisePanelProps = {
   logAction: FormActionDispatch;
   logState: LogSetActionState;
   logPending: boolean;
+  durationTimerPhase: ExerciseTimerPhase;
+  durationTimerRemainingSeconds: number;
+  onStartDurationTimer: () => void;
+  onPauseDurationTimer: () => void;
+  onResumeDurationTimer: () => void;
+  onRestartDurationTimer: () => void;
 };
 
 /**
@@ -406,9 +544,26 @@ export function ExercisePanel({
   logAction,
   logState,
   logPending,
+  durationTimerPhase,
+  durationTimerRemainingSeconds,
+  onStartDurationTimer,
+  onPauseDurationTimer,
+  onResumeDurationTimer,
+  onRestartDurationTimer,
 }: ExercisePanelProps) {
+  // The "resting" phase also covers the rest taken after an exercise's
+  // LAST set (before rest-timer.phase flips to "done" and the panel
+  // switches to RestDoneExerciseBlock) -- without this branch the label
+  // below would claim "Siguiente: serie 3/3" for a set that was already
+  // just logged, since Math.min's clamp has nothing left to distinguish
+  // "about to do set 3" from "just finished set 3".
+  const exerciseSetsDone = exercise.completedSets >= exercise.targetSets;
   const nextSetNumber = Math.min(exercise.completedSets + 1, exercise.targetSets);
-  const nextSetLabel = `Siguiente: serie ${nextSetNumber}/${exercise.targetSets} · ${formatTarget(exercise)}`;
+  const nextSetLabel = exerciseSetsDone
+    ? isLastExercise
+      ? "Descanso final"
+      : "Siguiente: nuevo ejercicio"
+    : `Siguiente: serie ${nextSetNumber}/${exercise.targetSets} · ${formatTarget(exercise)}`;
 
   return (
     // Keyed on exercise + phase, not phase alone -- browsing to a different
@@ -439,6 +594,12 @@ export function ExercisePanel({
           logAction={logAction}
           logState={logState}
           logPending={logPending}
+          durationTimerPhase={durationTimerPhase}
+          durationTimerRemainingSeconds={durationTimerRemainingSeconds}
+          onStartDurationTimer={onStartDurationTimer}
+          onPauseDurationTimer={onPauseDurationTimer}
+          onResumeDurationTimer={onResumeDurationTimer}
+          onRestartDurationTimer={onRestartDurationTimer}
         />
       )}
     </div>

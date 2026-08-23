@@ -22,7 +22,6 @@ export type CoachTurnResult = {
   reply: string;
   draft: RoutineDraft | null;
   draftRejectedReason: string | null;
-  /** Ephemeral, per-turn only -- unlike `draft`, never round-tripped back as conversation context (see tools.ts's `propose_action` doc comment). */
   actionDraft: CoachActionDraft | null;
   actionRejectedReason: string | null;
   usage: { inputTokens: number; outputTokens: number; totalTokens: number } | null;
@@ -36,13 +35,14 @@ export async function runCoachTurn(params: {
   message: string;
   history: readonly CoachMessage[];
   currentDraft: RoutineDraft | null;
+  currentActionDraft: CoachActionDraft | null;
   provider?: CoachProvider;
 }): Promise<CoachTurnResult> {
   const provider = params.provider ?? new OpenAIProvider();
   const model = getCoachModel();
 
   const context = await buildCoachBaselineContext(params.userId);
-  const instructions = buildSystemPrompt(context, params.currentDraft);
+  const instructions = buildSystemPrompt(context, params.currentDraft, params.currentActionDraft);
 
   const input: CoachInputItem[] = [
     ...params.history.map((m) => ({ role: m.role, content: m.content }) as const),

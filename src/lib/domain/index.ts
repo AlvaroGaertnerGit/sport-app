@@ -1,7 +1,7 @@
 export { buildCalendarWeeks, getTrainingCalendarMonth, type CalendarCell } from "./calendar";
 export { formatExerciseTarget, isExerciseSetsDone } from "./exercise-progress";
 export { searchExercises } from "./exercises";
-export { getSessionHistory } from "./history";
+export { getRecentSessionsForMuscleGroups, getSessionHistory } from "./history";
 export {
   addRoutineToPlan,
   archivePlan,
@@ -37,6 +37,7 @@ export {
   createRoutine,
   getRoutineDetail,
   getRoutineExerciseCount,
+  getRoutineExerciseNames,
   getUserRoutines,
   removeExerciseFromRoutine,
   replaceExerciseInRoutine,
@@ -65,6 +66,7 @@ export type {
   ExerciseSearchResult,
   HistorySessionSummary,
   InProgressSession,
+  MuscleGroupSessionSummary,
   NewRoutineExerciseTarget,
   NextPlanItem,
   PersonalBestStat,

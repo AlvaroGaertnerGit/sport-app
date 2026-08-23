@@ -121,6 +121,22 @@ export type HistorySessionSummary = {
 }
 
 /**
+ * A session that trained at least one exercise in a requested muscle group
+ * (e.g. "back", "lats" for "espalda") — for Coach questions like "¿cuándo
+ * entrené espalda?" that `HistorySessionSummary` can't answer (it has no
+ * muscle-group dimension). `matchedExerciseNames` names exactly which
+ * exercises in that session hit the requested group, so the Coach can say
+ * *which* exercises, not just "sí, entrenaste espalda".
+ */
+export type MuscleGroupSessionSummary = {
+  sessionId: string
+  routineName: string | null
+  status: WorkoutSessionStatus
+  startedAt: string
+  matchedExerciseNames: string[]
+}
+
+/**
  * Calendar types — a temporal-spatial view of the exact same
  * workout_sessions data HistorySessionSummary already reads, grouped by
  * UTC calendar day instead of listed chronologically. `sessionsByDate` can

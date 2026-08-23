@@ -90,6 +90,8 @@ export type CoachActionOp =
       exerciseName: string;
       targetSets: number;
       previousTargetSets: number;
+      target: NewRoutineExerciseTarget;
+      previousTarget: NewRoutineExerciseTarget;
     };
 
 export type CoachActionDraft = { summary: string; ops: CoachActionOp[]; destructive: boolean };
@@ -409,16 +411,32 @@ async function resolveOp(
       const exercise = await resolveExerciseInRoutine(userId, routine.routine.routineId, routine.routine.name, op.exerciseName);
       if (exercise.status !== "resolved") return { status: exercise.status === "ambiguous" ? "ambiguous" : "rejected", reason: exercise.reason };
 
+      const current = exercise.exercise;
+      const previousTarget: NewRoutineExerciseTarget = {
+        targetType: current.targetType,
+        targetSets: current.targetSets,
+        targetRepsMin: current.targetRepsMin,
+        targetRepsMax: current.targetRepsMax,
+        targetDurationSeconds: current.targetDurationSeconds,
+        targetWeightKg: current.targetWeightKg,
+      };
+
       return {
         status: "resolved",
         op: {
           type: "update_exercise_target",
           routineId: routine.routine.routineId,
           routineName: routine.routine.name,
-          exerciseId: exercise.exercise.exerciseId,
-          exerciseName: exercise.exercise.exerciseName,
+          exerciseId: current.exerciseId,
+          exerciseName: current.exerciseName,
           targetSets: op.targetSets,
-          previousTargetSets: exercise.exercise.targetSets,
+          previousTargetSets: current.targetSets,
+          // Only targetSets ever changes here -- everything else is the
+          // exercise's real current target, composed server-side (never
+          // from what the LLM sent), so `updateRoutineExerciseTarget`'s
+          // full-row write can never silently blank out reps/weight/duration.
+          target: { ...previousTarget, targetSets: op.targetSets },
+          previousTarget,
         },
       };
     }

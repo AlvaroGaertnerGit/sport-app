@@ -39,7 +39,7 @@ function describeOp(op: CoachActionOp): string {
  * affordance). Cancel is entirely client-side -- dismissing never writes,
  * matching the "only the real confirm button executes anything" rule.
  */
-export function ActionPreview({ draft }: { draft: CoachActionDraft }) {
+export function ActionPreview({ draft, onSettled }: { draft: CoachActionDraft; onSettled?: () => void }) {
   const [dismissed, setDismissed] = useState(false);
   const [state, confirmAction, pending] = useActionState(confirmCoachActionAction, INITIAL_STATE);
   const router = useRouter();
@@ -47,8 +47,15 @@ export function ActionPreview({ draft }: { draft: CoachActionDraft }) {
   useEffect(() => {
     if (state?.executed) {
       router.refresh();
+      onSettled?.();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state, router]);
+
+  function cancel() {
+    setDismissed(true);
+    onSettled?.();
+  }
 
   if (dismissed) {
     return null;
@@ -61,7 +68,7 @@ export function ActionPreview({ draft }: { draft: CoachActionDraft }) {
   return (
     <div className="flex flex-col gap-2">
       <ConfirmPanel
-        onCancel={() => setDismissed(true)}
+        onCancel={cancel}
         message={
           <div className="flex flex-col gap-2">
             <p className="font-medium">{draft.summary}</p>
@@ -73,7 +80,7 @@ export function ActionPreview({ draft }: { draft: CoachActionDraft }) {
           </div>
         }
         cancelButton={
-          <Button type="button" variant="ghost" onClick={() => setDismissed(true)}>
+          <Button type="button" variant="ghost" onClick={cancel}>
             Cancelar
           </Button>
         }

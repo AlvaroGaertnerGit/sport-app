@@ -3,7 +3,14 @@
 import { revalidatePath } from "next/cache";
 
 import { requireUser } from "@/lib/auth/dal";
-import { addExerciseToRoutine, getRoutineDetail, removeExerciseFromRoutine, searchExercises } from "@/lib/domain";
+import {
+  addExerciseToRoutine,
+  getRoutineDetail,
+  removeExerciseFromRoutine,
+  reorderRoutineExercise,
+  searchExercises,
+  updateRoutineExerciseTarget,
+} from "@/lib/domain";
 import type { ExerciseSearchResult, NewRoutineExerciseTarget } from "@/lib/domain";
 
 function revalidateRoutineScreens(routineId: string) {
@@ -50,11 +57,65 @@ function parseOptionalWeight(formData: FormData): { ok: true; value: number | nu
 
 /**
  * `target` is never defaulted -- every field is parsed from the form the
- * "configure" step submits, since `routine_exercises` has real check
- * constraints (target_type coherence, sets > 0, ...) a silent default
- * could violate or, worse, misrepresent (e.g. a duration exercise
- * defaulted to a rep range).
+ * "configure"/"editar" step submits, since `routine_exercises` has real
+ * check constraints (target_type coherence, sets > 0, ...) a silent
+ * default could violate or, worse, misrepresent (e.g. a duration exercise
+ * defaulted to a rep range). Shared by add-exercise's ConfigureStep and
+ * the new per-row edit form -- same fields, same rules, one parser.
  */
+function parseTargetFromForm(formData: FormData): { ok: true; target: NewRoutineExerciseTarget } | { ok: false; error: string } {
+  const targetType = formData.get("targetType") === "duration" ? "duration" : "reps";
+
+  const targetSets = parseRequiredInt(formData, "targetSets");
+  if (targetSets == null || targetSets < 1) {
+    return { ok: false, error: "Número de series no válido." };
+  }
+
+  const weight = parseOptionalWeight(formData);
+  if (!weight.ok) {
+    return { ok: false, error: "Peso no válido." };
+  }
+
+  if (targetType === "duration") {
+    const targetDurationSeconds = parseRequiredInt(formData, "targetDurationSeconds");
+    if (targetDurationSeconds == null || targetDurationSeconds < 1) {
+      return { ok: false, error: "Duración no válida." };
+    }
+    return {
+      ok: true,
+      target: {
+        targetType: "duration",
+        targetSets,
+        targetRepsMin: null,
+        targetRepsMax: null,
+        targetDurationSeconds,
+        targetWeightKg: weight.value,
+      },
+    };
+  }
+
+  const targetRepsMin = parseRequiredInt(formData, "targetRepsMin");
+  if (targetRepsMin == null || targetRepsMin < 0) {
+    return { ok: false, error: "Repeticiones mínimas no válidas." };
+  }
+  const rawMax = formData.get("targetRepsMax");
+  const targetRepsMax = rawMax != null && rawMax !== "" ? parseRequiredInt(formData, "targetRepsMax") : targetRepsMin;
+  if (targetRepsMax == null || targetRepsMax < targetRepsMin) {
+    return { ok: false, error: "Repeticiones máximas no válidas." };
+  }
+  return {
+    ok: true,
+    target: {
+      targetType: "reps",
+      targetSets,
+      targetRepsMin,
+      targetRepsMax,
+      targetDurationSeconds: null,
+      targetWeightKg: weight.value,
+    },
+  };
+}
+
 export async function addExerciseToRoutineAction(
   _prevState: ExerciseActionState,
   formData: FormData,
@@ -62,61 +123,84 @@ export async function addExerciseToRoutineAction(
   const user = await requireUser();
   const routineId = String(formData.get("routineId") ?? "");
   const exerciseId = String(formData.get("exerciseId") ?? "");
-  const targetType = formData.get("targetType") === "duration" ? "duration" : "reps";
 
   if (!routineId || !exerciseId) {
     return { error: "Falta información del ejercicio." };
   }
 
-  const targetSets = parseRequiredInt(formData, "targetSets");
-  if (targetSets == null || targetSets < 1) {
-    return { error: "Número de series no válido." };
-  }
-
-  const weight = parseOptionalWeight(formData);
-  if (!weight.ok) {
-    return { error: "Peso no válido." };
-  }
-
-  let target: NewRoutineExerciseTarget;
-  if (targetType === "duration") {
-    const targetDurationSeconds = parseRequiredInt(formData, "targetDurationSeconds");
-    if (targetDurationSeconds == null || targetDurationSeconds < 1) {
-      return { error: "Duración no válida." };
-    }
-    target = {
-      targetType: "duration",
-      targetSets,
-      targetRepsMin: null,
-      targetRepsMax: null,
-      targetDurationSeconds,
-      targetWeightKg: weight.value,
-    };
-  } else {
-    const targetRepsMin = parseRequiredInt(formData, "targetRepsMin");
-    if (targetRepsMin == null || targetRepsMin < 0) {
-      return { error: "Repeticiones mínimas no válidas." };
-    }
-    const rawMax = formData.get("targetRepsMax");
-    const targetRepsMax = rawMax != null && rawMax !== "" ? parseRequiredInt(formData, "targetRepsMax") : targetRepsMin;
-    if (targetRepsMax == null || targetRepsMax < targetRepsMin) {
-      return { error: "Repeticiones máximas no válidas." };
-    }
-    target = {
-      targetType: "reps",
-      targetSets,
-      targetRepsMin,
-      targetRepsMax,
-      targetDurationSeconds: null,
-      targetWeightKg: weight.value,
-    };
+  const parsed = parseTargetFromForm(formData);
+  if (!parsed.ok) {
+    return { error: parsed.error };
   }
 
   try {
-    await addExerciseToRoutine(user.id, routineId, exerciseId, target);
+    await addExerciseToRoutine(user.id, routineId, exerciseId, parsed.target);
   } catch (err) {
     console.error("addExerciseToRoutineAction failed:", err);
     return { error: "No se ha podido añadir el ejercicio. Puede que ya esté en la rutina." };
+  }
+
+  revalidateRoutineScreens(routineId);
+}
+
+/**
+ * The manual editor's counterpart to the Coach IA's `update_exercise_target`
+ * write path (action-execution.ts) -- both end up calling the same,
+ * unchanged `updateRoutineExerciseTarget` domain function with a full
+ * target, never a parallel write path.
+ */
+export async function updateExerciseTargetAction(
+  _prevState: ExerciseActionState,
+  formData: FormData,
+): Promise<ExerciseActionState> {
+  const user = await requireUser();
+  const routineId = String(formData.get("routineId") ?? "");
+  const exerciseId = String(formData.get("exerciseId") ?? "");
+
+  if (!routineId || !exerciseId) {
+    return { error: "Falta información del ejercicio." };
+  }
+
+  const parsed = parseTargetFromForm(formData);
+  if (!parsed.ok) {
+    return { error: parsed.error };
+  }
+
+  try {
+    await updateRoutineExerciseTarget(user.id, routineId, exerciseId, parsed.target);
+  } catch (err) {
+    console.error("updateExerciseTargetAction failed:", err);
+    return { error: "No se ha podido guardar el cambio." };
+  }
+
+  revalidateRoutineScreens(routineId);
+}
+
+/**
+ * ↑/↓ per row -- the accessible alternative to drag & drop (never the only
+ * way to reorder). `toPosition` is the exercise's own current `order` ± 1;
+ * `reorderRoutineExercise` already clamps out-of-range positions, so moving
+ * the first exercise up or the last one down is a harmless no-op, not an
+ * error.
+ */
+export async function reorderRoutineExerciseAction(
+  _prevState: ExerciseActionState,
+  formData: FormData,
+): Promise<ExerciseActionState> {
+  const user = await requireUser();
+  const routineId = String(formData.get("routineId") ?? "");
+  const exerciseId = String(formData.get("exerciseId") ?? "");
+  const toPosition = Number(formData.get("toPosition"));
+
+  if (!routineId || !exerciseId || !Number.isInteger(toPosition)) {
+    return { error: "Falta información del ejercicio." };
+  }
+
+  try {
+    await reorderRoutineExercise(user.id, routineId, exerciseId, toPosition);
+  } catch (err) {
+    console.error("reorderRoutineExerciseAction failed:", err);
+    return { error: "No se ha podido mover el ejercicio." };
   }
 
   revalidateRoutineScreens(routineId);

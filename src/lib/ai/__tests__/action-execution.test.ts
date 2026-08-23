@@ -72,9 +72,20 @@ describe("executeCoachActionOps", () => {
     vi.mocked(updateRoutineExerciseTarget).mockRejectedValue(new Error("exercise not found"));
 
     const snapshot = { order: 2, target: TARGET };
+    const previousTarget = { ...TARGET, targetSets: 3 };
     const result = await executeCoachActionOps("u1", [
       { type: "remove_exercise", routineId: "r1", routineName: "Push", exerciseId: "ex-dips", exerciseName: "Dips", snapshot },
-      { type: "update_exercise_target", routineId: "r1", routineName: "Push", exerciseId: "ex-bench", exerciseName: "Bench Press", targetSets: 4, previousTargetSets: 3 },
+      {
+        type: "update_exercise_target",
+        routineId: "r1",
+        routineName: "Push",
+        exerciseId: "ex-bench",
+        exerciseName: "Bench Press",
+        targetSets: 4,
+        previousTargetSets: 3,
+        target: { ...previousTarget, targetSets: 4 },
+        previousTarget,
+      },
     ]);
 
     expect(result.status).toBe("failed");
@@ -86,13 +97,24 @@ describe("executeCoachActionOps", () => {
     vi.mocked(replaceExerciseInRoutine).mockRejectedValue(new Error("destination already in routine"));
     vi.mocked(updateRoutineExerciseTarget).mockResolvedValueOnce(undefined); // the compensation call
 
+    const previousTarget = { ...TARGET, targetSets: 3 };
     const result = await executeCoachActionOps("u1", [
-      { type: "update_exercise_target", routineId: "r1", routineName: "Push", exerciseId: "ex-bench", exerciseName: "Bench Press", targetSets: 4, previousTargetSets: 3 },
+      {
+        type: "update_exercise_target",
+        routineId: "r1",
+        routineName: "Push",
+        exerciseId: "ex-bench",
+        exerciseName: "Bench Press",
+        targetSets: 4,
+        previousTargetSets: 3,
+        target: { ...previousTarget, targetSets: 4 },
+        previousTarget,
+      },
       { type: "replace_exercise", routineId: "r1", routineName: "Push", fromExerciseId: "ex-dips", fromExerciseName: "Dips", toExerciseId: "ex-bench", toExerciseName: "Bench Press" },
     ]);
 
     expect(result.status).toBe("failed");
-    expect(updateRoutineExerciseTarget).toHaveBeenNthCalledWith(2, "u1", "r1", "ex-bench", 3);
+    expect(updateRoutineExerciseTarget).toHaveBeenNthCalledWith(2, "u1", "r1", "ex-bench", previousTarget);
   });
 
   it("moves a reordered exercise back to its original position when a later op fails", async () => {

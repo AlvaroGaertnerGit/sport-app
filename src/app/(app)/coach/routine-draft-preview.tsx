@@ -19,14 +19,24 @@ const INITIAL_STATE = undefined;
  * this phase (brief §12): confirms via `confirmCreateRoutineAction`, which
  * re-resolves/re-validates the draft fresh before creating anything.
  */
-export function RoutineDraftPreview({ draft, onEditRequested }: { draft: RoutineDraft; onEditRequested: () => void }) {
+export function RoutineDraftPreview({
+  draft,
+  onEditRequested,
+  onSettled,
+}: {
+  draft: RoutineDraft;
+  onEditRequested: () => void;
+  onSettled?: () => void;
+}) {
   const [state, confirmAction, pending] = useActionState(confirmCreateRoutineAction, INITIAL_STATE);
   const router = useRouter();
 
   useEffect(() => {
     if (state?.executed) {
       router.refresh();
+      onSettled?.();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state, router]);
 
   return (

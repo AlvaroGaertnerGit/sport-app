@@ -6,8 +6,10 @@ import { useActionState, useEffect, useRef, useState } from "react";
 import { Button, ButtonArrow, FOCUS_RING_CLASSNAME } from "@/components/ui/button";
 import { ConfirmPanel } from "@/components/ui/confirm-panel";
 import { ErrorText } from "@/components/ui/error-text";
+import { playCompletionChime, unlockAudioCue } from "@/lib/audio-cue";
 import { isExerciseSetsDone } from "@/lib/domain/exercise-progress";
 import type { ExerciseProgression, WorkoutSessionDetail } from "@/lib/domain";
+import type { ExerciseTimerPhase } from "@/lib/exercise-timer";
 
 import {
   abandonSessionAction,
@@ -18,6 +20,7 @@ import {
 } from "./actions";
 import { ExercisePanel, type ExercisePanelPhase } from "./exercise-panel";
 import { ProgressBar } from "./progress-bar";
+import { useExerciseTimer } from "./use-exercise-timer";
 import { DEFAULT_REST_SECONDS, useRestTimer } from "./use-rest-timer";
 
 const INITIAL_STATE: WorkoutActionState = undefined;
@@ -72,29 +75,57 @@ export function WorkoutSessionView({
   const logStateForExercise = logState?.exerciseId === exercise?.exerciseId ? logState : undefined;
 
   const restTimer = useRestTimer(session.sessionId, exercise?.exerciseId);
+  const exerciseTimer = useExerciseTimer(session.sessionId, exercise?.exerciseId);
 
   // Rest starts automatically the moment a set is logged successfully --
   // no second confirmation. Detected as a pending->!pending transition
   // with no error, rather than the action returning extra data beyond
-  // which exercise it was for.
+  // which exercise it was for. The exercise-duration timer is cleared in
+  // the same moment: it's scoped per exercise (not per set), so without
+  // this a second/third set of the same timed exercise would reopen
+  // already showing "Tiempo terminado" from the set that was just logged.
   const wasLogPending = useRef(logPending);
   useEffect(() => {
     if (wasLogPending.current && !logPending && !logState?.error && exercise && logState?.exerciseId === exercise.exerciseId) {
       restTimer.start(exercise.exerciseId, exercise.restSeconds ?? DEFAULT_REST_SECONDS);
+      exerciseTimer.clear();
     }
     wasLogPending.current = logPending;
-    // restTimer.start is stable (see use-rest-timer.ts); depending on the
-    // whole `restTimer` object would re-run this on every render, since a
-    // fresh object is returned each time.
+    // restTimer.start/exerciseTimer.clear are stable (see the hooks'
+    // own files); depending on the whole objects would re-run this on
+    // every render, since a fresh object is returned each time.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [logPending, logState, exercise]);
+
+  // One place both timers' completion chime fires from -- never inside
+  // either hook itself (use-rest-timer.ts already owns its own
+  // vibrate-once effect; this only adds the sound, brief §13/§17: exactly
+  // once per real completion, never on an unrelated re-render).
+  const prevRestPhaseRef = useRef(restTimer.phase);
+  useEffect(() => {
+    if (prevRestPhaseRef.current !== "done" && restTimer.phase === "done") {
+      playCompletionChime();
+    }
+    prevRestPhaseRef.current = restTimer.phase;
+  }, [restTimer.phase]);
+
+  const prevExerciseTimerPhaseRef = useRef<ExerciseTimerPhase>(exerciseTimer.phase);
+  useEffect(() => {
+    if (prevExerciseTimerPhaseRef.current !== "done" && exerciseTimer.phase === "done") {
+      playCompletionChime();
+    }
+    prevExerciseTimerPhaseRef.current = exerciseTimer.phase;
+  }, [exerciseTimer.phase]);
 
   // Shared by "Siguiente" (once the exercise is done) and the post-rest
   // "Siguiente ejercicio"/"Continuar" button -- Math.min already no-ops
   // when there's nothing after the last exercise, so one function covers
-  // both without a separate isLastExercise branch.
+  // both without a separate isLastExercise branch. Both timers are
+  // cleared for the exercise being left -- brief §9/§10: no timer or
+  // sound belonging to an abandoned exercise may keep running or fire later.
   function advanceToNextExercise() {
     restTimer.clear();
+    exerciseTimer.clear();
     setViewIndex((i) => Math.min(exercises.length - 1, i + 1));
   }
 
@@ -105,6 +136,30 @@ export function WorkoutSessionView({
     } else {
       setConfirming("skip");
     }
+  }
+
+  // unlockAudioCue() runs synchronously inside each of these real click
+  // handlers, never from an effect -- mobile browsers only allow
+  // AudioContext.resume() to actually take effect inside a genuine user
+  // gesture's own call stack (brief §15). Idempotent and cheap, so it's
+  // safe to call from every one of the timer's own controls rather than
+  // trying to guess which single tap "counts".
+  function handleStartDurationTimer() {
+    if (!exercise || exercise.targetDurationSeconds == null) return;
+    unlockAudioCue();
+    exerciseTimer.start(exercise.exerciseId, exercise.targetDurationSeconds);
+  }
+  function handlePauseDurationTimer() {
+    unlockAudioCue();
+    exerciseTimer.pause();
+  }
+  function handleResumeDurationTimer() {
+    unlockAudioCue();
+    exerciseTimer.resume();
+  }
+  function handleRestartDurationTimer() {
+    unlockAudioCue();
+    exerciseTimer.restart();
   }
 
   const panelPhase: ExercisePanelPhase =
@@ -130,7 +185,16 @@ export function WorkoutSessionView({
   });
 
   return (
-    <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-2 px-5 pt-6 pb-10">
+    // Workout has no bottom nav (it's outside the `(app)` route group's
+    // fixed bar, by design -- a full-screen guided flow) and its own
+    // action buttons (Registrar serie, Finalizar, Abandonar) are in normal
+    // flow, not fixed -- but in a PWA standalone window with
+    // `viewport-fit: cover` (see layout.tsx), the app renders all the way
+    // under the home indicator, so the last bit of scrollable content
+    // still needs real clearance there. `pb-10` alone was already correct
+    // for a normal browser tab; this adds the device's own inset on top of
+    // it (0 wherever there's no notch/indicator, so nothing changes there).
+    <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-2 px-5 pt-6 pb-[calc(2.5rem+env(safe-area-inset-bottom))]">
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between font-mono text-xs tracking-wide uppercase">
           <Link
@@ -164,6 +228,12 @@ export function WorkoutSessionView({
             logAction={logAction}
             logState={logStateForExercise}
             logPending={logPending}
+            durationTimerPhase={exerciseTimer.phase}
+            durationTimerRemainingSeconds={exerciseTimer.remainingSeconds}
+            onStartDurationTimer={handleStartDurationTimer}
+            onPauseDurationTimer={handlePauseDurationTimer}
+            onResumeDurationTimer={handleResumeDurationTimer}
+            onRestartDurationTimer={handleRestartDurationTimer}
           />
 
           {showBrowseNav &&

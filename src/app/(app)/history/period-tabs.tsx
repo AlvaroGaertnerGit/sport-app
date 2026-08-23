@@ -8,7 +8,7 @@ const PERIODS: { value: ProgressPeriod; label: string }[] = [
   { value: "30d", label: "30D" },
   { value: "3m", label: "3M" },
   { value: "1y", label: "1A" },
-  { value: "all", label: "TODO" },
+  { value: "all", label: "Todo" },
 ];
 
 /** Plain links with a query string -- fast, no client JS, matches Workout's Anterior/Siguiente idiom. */

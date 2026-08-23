@@ -61,7 +61,7 @@ async function undoOp(userId: string, completed: CompletedOp): Promise<void> {
       await reorderRoutineExercise(userId, op.routineId, op.exerciseId, op.fromPosition);
       return;
     case "update_exercise_target":
-      await updateRoutineExerciseTarget(userId, op.routineId, op.exerciseId, op.previousTargetSets);
+      await updateRoutineExerciseTarget(userId, op.routineId, op.exerciseId, op.previousTarget);
       return;
   }
 }
@@ -85,7 +85,7 @@ async function applyOp(userId: string, op: CoachActionOp): Promise<{ planItemId?
       await reorderRoutineExercise(userId, op.routineId, op.exerciseId, op.toPosition);
       return {};
     case "update_exercise_target":
-      await updateRoutineExerciseTarget(userId, op.routineId, op.exerciseId, op.targetSets);
+      await updateRoutineExerciseTarget(userId, op.routineId, op.exerciseId, op.target);
       return {};
   }
 }

@@ -6,6 +6,7 @@ import { runCoachTurn, type CoachMessage } from "@/lib/ai/coach-service";
 import { checkCoachRateLimit } from "@/lib/ai/rate-limit";
 import { CoachProviderError } from "@/lib/ai/provider";
 import type { RoutineDraft } from "@/lib/ai/routine-draft";
+import type { CoachActionDraft } from "@/lib/ai/action-draft";
 
 /**
  * The one HTTP boundary between the Coach UI and the AI layer (brief §6,
@@ -55,6 +56,20 @@ function parseCurrentDraft(value: unknown): RoutineDraft | null {
   return null;
 }
 
+function parseCurrentActionDraft(value: unknown): CoachActionDraft | null {
+  if (
+    value != null &&
+    typeof value === "object" &&
+    "summary" in value &&
+    "ops" in value &&
+    "destructive" in value &&
+    Array.isArray((value as CoachActionDraft).ops)
+  ) {
+    return value as CoachActionDraft;
+  }
+  return null;
+}
+
 export async function POST(request: Request) {
   const user = await getCurrentUser();
   if (!user) {
@@ -90,6 +105,7 @@ export async function POST(request: Request) {
 
   const history = parseHistory((body as { history?: unknown }).history);
   const currentDraft = parseCurrentDraft((body as { currentDraft?: unknown }).currentDraft);
+  const currentActionDraft = parseCurrentActionDraft((body as { currentActionDraft?: unknown }).currentActionDraft);
 
   try {
     const result = await runCoachTurn({
@@ -97,6 +113,7 @@ export async function POST(request: Request) {
       message: messageRaw,
       history,
       currentDraft,
+      currentActionDraft,
     });
 
     // Usage is dev-time cost visibility only (brief §51) -- logged

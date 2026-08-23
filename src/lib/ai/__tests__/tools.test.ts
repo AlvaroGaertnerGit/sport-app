@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
  * "The engine determines the facts, the LLM interprets them" (brief §9-10)
@@ -27,15 +27,20 @@ vi.mock("@/lib/domain/progress", () => ({
 }));
 
 vi.mock("@/lib/domain/plans", () => ({ getActivePlan: vi.fn(), getPlanItems: vi.fn() }));
-vi.mock("@/lib/domain/routines", () => ({ getRoutineDetail: vi.fn(), getUserRoutines: vi.fn() }));
-vi.mock("@/lib/domain/history", () => ({ getSessionHistory: vi.fn() }));
+vi.mock("@/lib/domain/routines", () => ({ getRoutineDetail: vi.fn(), getRoutineExerciseNames: vi.fn(), getUserRoutines: vi.fn() }));
+vi.mock("@/lib/domain/history", () => ({ getSessionHistory: vi.fn(), getRecentSessionsForMuscleGroups: vi.fn() }));
 vi.mock("@/lib/domain/today", () => ({ getTodayRecommendation: vi.fn() }));
+vi.mock("@/lib/domain/coach", () => ({ getCoachSummary: vi.fn() }));
 
 const { executeCoachTool } = await import("../tools");
 const { getActivePlanExerciseProgressions } = await import("@/lib/domain/progression");
 const { getProgressSummary } = await import("@/lib/domain/progress");
-const { getActivePlan } = await import("@/lib/domain/plans");
-const { getRoutineDetail, getUserRoutines } = await import("@/lib/domain/routines");
+const { getActivePlan, getPlanItems } = await import("@/lib/domain/plans");
+const { getRoutineDetail, getRoutineExerciseNames, getUserRoutines } = await import("@/lib/domain/routines");
+const { getRecentSessionsForMuscleGroups } = await import("@/lib/domain/history");
+const { getCoachSummary } = await import("@/lib/domain/coach");
+const { getTodayRecommendation } = await import("@/lib/domain/today");
+const { getRoutineExerciseProgressions } = await import("@/lib/domain/progression");
 
 type RawOpOverrides = {
   type?: "add_routine_to_plan" | "add_exercise" | "remove_exercise" | "replace_exercise" | "reorder_exercise" | "update_exercise_target";
@@ -317,5 +322,211 @@ describe("propose_routine_draft tool with addToActivePlan", () => {
 
     const facts = JSON.parse(result.output);
     expect(facts.draft.activePlanName).toBeNull();
+  });
+});
+
+describe("getCurrentPlan tool", () => {
+  beforeEach(() => {
+    vi.mocked(getActivePlan).mockClear();
+    vi.mocked(getPlanItems).mockClear();
+    vi.mocked(getRoutineExerciseNames).mockClear();
+    vi.mocked(getRoutineDetail).mockClear();
+  });
+
+  it("fetches every distinct routine's exercise names in a single getRoutineExerciseNames call -- never getRoutineDetail per plan item", async () => {
+    vi.mocked(getActivePlan).mockResolvedValue({ id: "p1", name: "Rotación 4 Días" });
+    vi.mocked(getPlanItems).mockResolvedValue([
+      { planItemId: "pi1", routineId: "r-espalda", routineName: "Espalda", order: 1 },
+      { planItemId: "pi2", routineId: "r-pecho", routineName: "Pecho", order: 2 },
+      { planItemId: "pi3", routineId: "r-piernas", routineName: "Piernas", order: 3 },
+      { planItemId: "pi4", routineId: "r-piernas", routineName: "Piernas", order: 4 }, // repeated routine
+    ]);
+    vi.mocked(getRoutineExerciseNames).mockResolvedValue(
+      new Map([
+        ["r-espalda", [{ order: 1, exerciseName: "Pull Up" }, { order: 2, exerciseName: "Row" }]],
+        ["r-pecho", [{ order: 1, exerciseName: "Bench Press" }]],
+        ["r-piernas", [{ order: 1, exerciseName: "Squat" }]],
+      ]),
+    );
+
+    const result = await executeCoachTool("user-1", "getCurrentPlan", "{}");
+    const facts = JSON.parse(result.output);
+
+    // Called once, with every distinct routine id -- the repeated "Piernas" routine only counted once in the request.
+    expect(getRoutineExerciseNames).toHaveBeenCalledTimes(1);
+    expect(getRoutineExerciseNames).toHaveBeenCalledWith("user-1", ["r-espalda", "r-pecho", "r-piernas"]);
+    expect(getRoutineDetail).not.toHaveBeenCalled();
+
+    expect(facts.routines).toHaveLength(4);
+    expect(facts.routines[0].exerciseNames).toEqual(["Pull Up", "Row"]);
+    expect(facts.routines[2].exerciseNames).toEqual(["Squat"]);
+    // The repeated routine (order 3 and 4) resolves to the same real exercises both times -- never dropped, never invented.
+    expect(facts.routines[3].exerciseNames).toEqual(["Squat"]);
+  });
+
+  it("reports no active plan honestly without calling getPlanItems or getRoutineExerciseNames", async () => {
+    vi.mocked(getActivePlan).mockResolvedValue(null);
+
+    const result = await executeCoachTool("user-1", "getCurrentPlan", "{}");
+    const facts = JSON.parse(result.output);
+
+    expect(facts.hasActivePlan).toBe(false);
+    expect(getPlanItems).not.toHaveBeenCalled();
+    expect(getRoutineExerciseNames).not.toHaveBeenCalled();
+  });
+});
+
+describe("getTodayWorkout tool", () => {
+  it("exposes progressionStatus/progressionReason so 'maintain' and 'insufficient_data' are never indistinguishable, even when recommendedNext is the same value either way", async () => {
+    vi.mocked(getTodayRecommendation).mockResolvedValue({
+      type: "ready",
+      planId: "p1",
+      planItemId: "pi1",
+      routineId: "r1",
+      routineName: "Empuje",
+    });
+    vi.mocked(getRoutineDetail).mockResolvedValue({
+      routineId: "r1",
+      name: "Empuje",
+      sportName: null,
+      exercises: [
+        {
+          order: 1,
+          exerciseId: "ex-maintain",
+          exerciseName: "Cable Overhead Extension",
+          targetSets: 3,
+          targetType: "reps",
+          targetRepsMin: 10,
+          targetRepsMax: 12,
+          targetDurationSeconds: null,
+          targetWeightKg: 25,
+        },
+        {
+          order: 2,
+          exerciseId: "ex-insufficient",
+          exerciseName: "Standing Cable Chest Press",
+          targetSets: 4,
+          targetType: "reps",
+          targetRepsMin: 8,
+          targetRepsMax: 10,
+          targetDurationSeconds: null,
+          targetWeightKg: 30,
+        },
+      ],
+    });
+    const sameTarget = { targetType: "reps" as const, sets: 3, reps: [10, 10, 10], weightKg: 25 };
+    vi.mocked(getRoutineExerciseProgressions).mockResolvedValue(
+      new Map([
+        [
+          "ex-maintain",
+          { status: "maintain" as const, sessionsConsidered: 3, last: sameTarget, next: sameTarget, reason: "La última sesión no completó las 3 series objetivo.", decliningTrend: false },
+        ],
+        [
+          "ex-insufficient",
+          { status: "insufficient_data" as const, sessionsConsidered: 1, last: sameTarget, next: sameTarget, reason: "Solo hay una sesión registrada. Necesitamos más datos para proponer un cambio.", decliningTrend: false },
+        ],
+      ]),
+    );
+
+    const result = await executeCoachTool("user-1", "getTodayWorkout", "{}");
+    const facts = JSON.parse(result.output);
+
+    const maintainExercise = facts.exercises.find((e: { exerciseName: string }) => e.exerciseName === "Cable Overhead Extension");
+    const insufficientExercise = facts.exercises.find((e: { exerciseName: string }) => e.exerciseName === "Standing Cable Chest Press");
+
+    expect(maintainExercise.progressionStatus).toBe("maintain");
+    expect(insufficientExercise.progressionStatus).toBe("insufficient_data");
+    expect(insufficientExercise.progressionReason).toMatch(/Solo hay una sesión/);
+    // Both happen to recommend the same next target -- the status/reason fields are the only way to tell them apart.
+    expect(maintainExercise.recommendedNext).toEqual(insufficientExercise.recommendedNext);
+  });
+});
+
+describe("getProgressOverview tool", () => {
+  it("passes through getCoachSummary's improving/maintaining/insufficientData verbatim -- the same read the Coach page header uses", async () => {
+    vi.mocked(getCoachSummary).mockResolvedValue({
+      hasData: true,
+      workoutsCompleted: 6,
+      sessionsPerWeek: 3.5,
+      currentStreakDays: 2,
+      improving: [{ exerciseId: "ex-bench", exerciseName: "Barbell Bench Press", routineName: "Push", delta: "+2 REPS" }],
+      maintaining: [{ exerciseId: "ex-dips", exerciseName: "Dips", routineName: "Push", nextTarget: "3 x 10" }],
+      insufficientData: [{ exerciseId: "ex-fly", exerciseName: "Cable Fly", routineName: "Push" }],
+    });
+
+    const result = await executeCoachTool("user-1", "getProgressOverview", "{}");
+    const facts = JSON.parse(result.output);
+
+    expect(facts.improving).toEqual([{ exerciseId: "ex-bench", exerciseName: "Barbell Bench Press", routineName: "Push", delta: "+2 REPS" }]);
+    expect(facts.maintaining[0].nextTarget).toBe("3 x 10");
+    expect(facts.insufficientData[0].exerciseName).toBe("Cable Fly");
+  });
+
+  it("never fabricates an improving exercise when the engine says none is improving", async () => {
+    vi.mocked(getCoachSummary).mockResolvedValue({
+      hasData: true,
+      workoutsCompleted: 2,
+      sessionsPerWeek: null,
+      currentStreakDays: 0,
+      improving: [],
+      maintaining: [],
+      insufficientData: [{ exerciseId: "ex-fly", exerciseName: "Cable Fly", routineName: "Push" }],
+    });
+
+    const result = await executeCoachTool("user-1", "getProgressOverview", "{}");
+    const facts = JSON.parse(result.output);
+
+    expect(facts.improving).toEqual([]);
+  });
+});
+
+describe("getRecentTrainingForMuscleGroup tool", () => {
+  beforeEach(() => {
+    vi.mocked(getRecentSessionsForMuscleGroups).mockClear();
+  });
+
+  it("resolves the requested muscle groups and passes through the domain read's sessions verbatim", async () => {
+    vi.mocked(getRecentSessionsForMuscleGroups).mockResolvedValue([
+      {
+        sessionId: "s1",
+        routineName: "Pull",
+        status: "completed",
+        startedAt: "2026-08-20T10:00:00.000Z",
+        matchedExerciseNames: ["Wide-Grip Lat Pulldown"],
+      },
+    ]);
+
+    const result = await executeCoachTool("user-1", "getRecentTrainingForMuscleGroup", JSON.stringify({ muscleGroups: ["back", "lats"] }));
+    const facts = JSON.parse(result.output);
+
+    expect(getRecentSessionsForMuscleGroups).toHaveBeenCalledWith("user-1", ["back", "lats"], expect.any(Number));
+    expect(facts.found).toBe(true);
+    expect(facts.sessions[0].matchedExerciseNames).toEqual(["Wide-Grip Lat Pulldown"]);
+  });
+
+  it("drops any muscle group value that isn't a real taxonomy value -- never trusts the model's raw input", async () => {
+    vi.mocked(getRecentSessionsForMuscleGroups).mockResolvedValue([]);
+
+    await executeCoachTool("user-1", "getRecentTrainingForMuscleGroup", JSON.stringify({ muscleGroups: ["back", "espalda"] }));
+
+    expect(getRecentSessionsForMuscleGroups).toHaveBeenCalledWith("user-1", ["back"], expect.any(Number));
+  });
+
+  it("reports found:false without calling the domain read when every requested value is invalid", async () => {
+    const result = await executeCoachTool("user-1", "getRecentTrainingForMuscleGroup", JSON.stringify({ muscleGroups: ["espalda"] }));
+    const facts = JSON.parse(result.output);
+
+    expect(facts.found).toBe(false);
+    expect(getRecentSessionsForMuscleGroups).not.toHaveBeenCalled();
+  });
+
+  it("returns an empty session list honestly when nothing matched -- never invents a session", async () => {
+    vi.mocked(getRecentSessionsForMuscleGroups).mockResolvedValue([]);
+
+    const result = await executeCoachTool("user-1", "getRecentTrainingForMuscleGroup", JSON.stringify({ muscleGroups: ["chest"] }));
+    const facts = JSON.parse(result.output);
+
+    expect(facts.found).toBe(true);
+    expect(facts.sessions).toEqual([]);
   });
 });

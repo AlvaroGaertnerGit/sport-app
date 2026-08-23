@@ -1,9 +1,11 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
-import type { HistorySessionSummary } from "./types";
+import type { HistorySessionSummary, MuscleGroupSessionSummary } from "./types";
 
 const DEFAULT_LIMIT = 30;
+/** How far back to look for a muscle-group match before giving up — generous enough to answer "¿cuándo entrené espalda?" even for a user who trains that group only every couple of weeks, without scanning the user's entire history. */
+const MUSCLE_GROUP_SCAN_LIMIT = 60;
 
 /**
  * The user's finished sessions, most recent first — never the live
@@ -75,4 +77,75 @@ export async function getSessionHistory(
       exerciseCount: exerciseIdsBySession.get(session.id)?.size ?? 0,
     };
   });
+}
+
+/**
+ * `getSessionHistory`'s muscle-group-scoped sibling — for Coach questions
+ * like "¿cuándo entrené espalda?" / "¿he hecho piernas esta semana?" that
+ * need to know *which* recent sessions actually trained a given muscle
+ * group, not just the routine name (a routine's name doesn't reliably say
+ * what it trains -- "Pull" trains "back"/"lats" just as much as a routine
+ * literally named "Espalda"). Two queries total, same shape as
+ * `getSessionHistory`: sessions, then their set_logs joined to
+ * `exercises.primary_muscles`, intersected against `muscleGroups` in JS.
+ * `muscleGroups` are expected to already be real taxonomy values (e.g.
+ * "back", "lats") -- translating a user's word ("espalda") into those is
+ * the Coach's own job, not this function's.
+ */
+export async function getRecentSessionsForMuscleGroups(
+  userId: string,
+  muscleGroups: readonly string[],
+  limit = DEFAULT_LIMIT,
+): Promise<MuscleGroupSessionSummary[]> {
+  if (muscleGroups.length === 0) {
+    return [];
+  }
+
+  const supabase = await createClient();
+
+  const { data: sessions, error: sessionsError } = await supabase
+    .from("workout_sessions")
+    .select("id, status, started_at, routines(name)")
+    .eq("user_id", userId)
+    .in("status", ["completed", "abandoned"])
+    .order("started_at", { ascending: false })
+    .limit(MUSCLE_GROUP_SCAN_LIMIT);
+  if (sessionsError) {
+    throw new Error(`getRecentSessionsForMuscleGroups: ${sessionsError.message}`);
+  }
+  if (!sessions || sessions.length === 0) {
+    return [];
+  }
+
+  const sessionIds = sessions.map((session) => session.id);
+  const { data: setLogs, error: setLogsError } = await supabase
+    .from("set_logs")
+    .select("workout_session_id, exercises(name, primary_muscles)")
+    .in("workout_session_id", sessionIds);
+  if (setLogsError) {
+    throw new Error(`getRecentSessionsForMuscleGroups: ${setLogsError.message}`);
+  }
+
+  const requested = new Set(muscleGroups);
+  const matchedNamesBySession = new Map<string, Set<string>>();
+  for (const log of setLogs ?? []) {
+    const exercise = log.exercises;
+    if (!exercise || !exercise.primary_muscles?.some((muscle) => requested.has(muscle))) {
+      continue;
+    }
+    const names = matchedNamesBySession.get(log.workout_session_id) ?? new Set<string>();
+    names.add(exercise.name);
+    matchedNamesBySession.set(log.workout_session_id, names);
+  }
+
+  return sessions
+    .filter((session) => matchedNamesBySession.has(session.id))
+    .slice(0, limit)
+    .map((session) => ({
+      sessionId: session.id,
+      routineName: session.routines?.name ?? null,
+      status: session.status as MuscleGroupSessionSummary["status"],
+      startedAt: session.started_at,
+      matchedExerciseNames: [...(matchedNamesBySession.get(session.id) ?? [])],
+    }));
 }

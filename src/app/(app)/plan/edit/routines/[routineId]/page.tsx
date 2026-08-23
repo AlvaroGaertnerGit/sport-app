@@ -2,18 +2,17 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { FOCUS_RING_CLASSNAME } from "@/components/ui/button";
-import { formatExerciseTarget, formatWeightKg } from "@/lib/domain/exercise-progress";
 import { DISPLAY_HEADING_CLASSNAME, EYEBROW_CLASSNAME } from "@/components/ui/typography";
 import { requireUser } from "@/lib/auth/dal";
 import { getRoutineDetail } from "@/lib/domain";
 
 import { AddExerciseFlow } from "./add-exercise-flow";
-import { RemoveExerciseButton } from "./remove-exercise-button";
+import { ExerciseRow } from "./exercise-row";
 
 /**
  * "Configurar rutina" -- the missing step of the already-existing chain
- * Plan → Editar plan → Rutinas del plan → **aquí** → Ejercicios. Add/remove
- * only (no reordering, no editing an existing exercise's target) --
+ * Plan → Editar plan → Rutinas del plan → **aquí** → Ejercicios. Add,
+ * remove, edit target (series/reps/peso/duración) and reorder (↑/↓) --
  * reusing `getRoutineDetail` (Plan's own read-only routine viewer already
  * built it) rather than a second routine-reading query.
  */
@@ -48,20 +47,17 @@ export default async function ConfigureRoutinePage(props: PageProps<"/plan/edit/
           <p className="text-sm text-muted-foreground">Esta rutina no tiene ejercicios todavía.</p>
         ) : (
           <div className="flex flex-col">
-            {routine.exercises.map((exercise) => (
-              <div key={exercise.exerciseId} className="flex items-center gap-3 border-b border-border py-3">
-                <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                  <span className="truncate font-sans font-bold text-foreground uppercase">
-                    {exercise.exerciseName}
-                  </span>
-                  <span className="font-mono text-xs text-muted-foreground uppercase">
-                    {exercise.targetSets} × {formatExerciseTarget(exercise)}
-                    {exercise.targetWeightKg != null && ` · ${formatWeightKg(exercise.targetWeightKg)} KG`}
-                  </span>
-                </div>
-                <RemoveExerciseButton routineId={routine.routineId} exerciseId={exercise.exerciseId} />
-              </div>
-            ))}
+            {[...routine.exercises]
+              .sort((a, b) => a.order - b.order)
+              .map((exercise, index) => (
+                <ExerciseRow
+                  key={exercise.exerciseId}
+                  routineId={routine.routineId}
+                  exercise={exercise}
+                  isFirst={index === 0}
+                  isLast={index === routine.exercises.length - 1}
+                />
+              ))}
           </div>
         )}
       </div>
