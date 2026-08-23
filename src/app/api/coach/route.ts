@@ -109,6 +109,8 @@ export async function POST(request: Request) {
       reply: result.reply,
       draft: result.draft,
       draftRejectedReason: result.draftRejectedReason,
+      actionDraft: result.actionDraft,
+      actionRejectedReason: result.actionRejectedReason,
     });
   } catch (err) {
     // Never leak stack traces, provider error details, or the API key.

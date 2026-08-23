@@ -6,7 +6,9 @@ import { Button, FOCUS_RING_CLASSNAME } from "@/components/ui/button";
 import { ErrorText } from "@/components/ui/error-text";
 import { EYEBROW_CLASSNAME } from "@/components/ui/typography";
 import type { RoutineDraft } from "@/lib/ai/routine-draft";
+import type { CoachActionDraft } from "@/lib/ai/action-draft";
 
+import { ActionPreview } from "./action-preview";
 import { RoutineDraftPreview } from "./routine-draft-preview";
 
 const SUGGESTIONS = ["¿Cómo estoy progresando?", "¿Qué me toca hoy?", "¿Cómo va mi press banca?"];
@@ -18,6 +20,8 @@ type Turn = {
   content: string;
   draft?: RoutineDraft | null;
   draftRejectedReason?: string | null;
+  actionDraft?: CoachActionDraft | null;
+  actionRejectedReason?: string | null;
 };
 
 /**
@@ -65,7 +69,14 @@ export function CoachChat() {
       }
       setTurns((prev) => [
         ...prev,
-        { role: "assistant", content: data.reply, draft: data.draft, draftRejectedReason: data.draftRejectedReason },
+        {
+          role: "assistant",
+          content: data.reply,
+          draft: data.draft,
+          draftRejectedReason: data.draftRejectedReason,
+          actionDraft: data.actionDraft,
+          actionRejectedReason: data.actionRejectedReason,
+        },
       ]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "No puedo responder ahora mismo. Inténtalo de nuevo.");
@@ -115,6 +126,8 @@ export function CoachChat() {
                   <RoutineDraftPreview draft={turn.draft} onEditRequested={() => composerRef.current?.focus()} />
                 )}
                 {turn.draftRejectedReason && <ErrorText>{turn.draftRejectedReason}</ErrorText>}
+                {turn.actionDraft && <ActionPreview draft={turn.actionDraft} />}
+                {turn.actionRejectedReason && <ErrorText>{turn.actionRejectedReason}</ErrorText>}
               </div>
             ),
           )}
@@ -151,7 +164,7 @@ export function CoachChat() {
             className={TEXTAREA_CLASSNAME}
           />
         </div>
-        <Button type="submit" disabled={pending || !input.trim()} className="w-auto shrink-0 px-6 text-base">
+        <Button type="submit" disabled={pending || !input.trim()} className="w-auto! shrink-0 px-6 text-base">
           Enviar
         </Button>
       </form>

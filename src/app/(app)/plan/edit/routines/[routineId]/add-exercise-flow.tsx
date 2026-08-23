@@ -67,7 +67,7 @@ function SearchStep({ routineId, onSelect }: { routineId: string; onSelect: (exe
               onClick={() => onSelect(exercise)}
               className={`flex min-h-14 items-center gap-4 border-b border-border py-3 text-left transition duration-150 active:scale-[0.98] ${FOCUS_RING_CLASSNAME} focus-visible:outline-primary`}
             >
-              <span className="min-w-0 flex-1 truncate font-sans font-bold text-foreground uppercase">
+              <span title={exercise.name} className="min-w-0 flex-1 truncate font-sans font-bold text-foreground uppercase">
                 {exercise.name}
               </span>
               {exercise.primaryMuscles[0] && (

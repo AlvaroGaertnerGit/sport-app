@@ -27,13 +27,43 @@ vi.mock("@/lib/domain/progress", () => ({
 }));
 
 vi.mock("@/lib/domain/plans", () => ({ getActivePlan: vi.fn(), getPlanItems: vi.fn() }));
-vi.mock("@/lib/domain/routines", () => ({ getRoutineDetail: vi.fn() }));
+vi.mock("@/lib/domain/routines", () => ({ getRoutineDetail: vi.fn(), getUserRoutines: vi.fn() }));
 vi.mock("@/lib/domain/history", () => ({ getSessionHistory: vi.fn() }));
 vi.mock("@/lib/domain/today", () => ({ getTodayRecommendation: vi.fn() }));
 
 const { executeCoachTool } = await import("../tools");
 const { getActivePlanExerciseProgressions } = await import("@/lib/domain/progression");
 const { getProgressSummary } = await import("@/lib/domain/progress");
+const { getActivePlan } = await import("@/lib/domain/plans");
+const { getRoutineDetail, getUserRoutines } = await import("@/lib/domain/routines");
+
+type RawOpOverrides = {
+  type?: "add_routine_to_plan" | "add_exercise" | "remove_exercise" | "replace_exercise" | "reorder_exercise" | "update_exercise_target";
+  routineName?: string | null;
+  exerciseName?: string | null;
+  newExerciseName?: string | null;
+  targetType?: "reps" | "duration" | null;
+  targetSets?: number | null;
+  toPosition?: number | null;
+};
+
+function rawActionOp(overrides: RawOpOverrides = {}) {
+  return {
+    type: "remove_exercise" as const,
+    routineName: null,
+    exerciseName: null,
+    newExerciseName: null,
+    targetType: null,
+    targetSets: null,
+    targetRepsMin: null,
+    targetRepsMax: null,
+    targetDurationSeconds: null,
+    targetWeightKg: null,
+    restSeconds: null,
+    toPosition: null,
+    ...overrides,
+  };
+}
 
 describe("getExerciseProgression tool", () => {
   it("passes through a 'complete' status from the engine unchanged -- never re-derives it", async () => {
@@ -123,5 +153,169 @@ describe("getTrainingSummary tool", () => {
     expect(facts.workoutsCompleted).toBe(6);
     expect(facts.sessionsPerWeek).toBe(3.5);
     expect(facts.currentStreakDays).toBe(2);
+  });
+});
+
+describe("propose_action tool", () => {
+  const PUSH_ROUTINE = { routineId: "r1", name: "Push", sportName: null, exerciseCount: 2 };
+  const PUSH_DETAIL = {
+    routineId: "r1",
+    name: "Push",
+    sportName: null,
+    exercises: [
+      {
+        order: 1,
+        exerciseId: "ex-dips",
+        exerciseName: "Dips",
+        targetSets: 3,
+        targetType: "reps" as const,
+        targetRepsMin: 8,
+        targetRepsMax: 12,
+        targetDurationSeconds: null,
+        targetWeightKg: null,
+      },
+      {
+        order: 2,
+        exerciseId: "ex-bench",
+        exerciseName: "Barbell Bench Press",
+        targetSets: 3,
+        targetType: "reps" as const,
+        targetRepsMin: 6,
+        targetRepsMax: 8,
+        targetDurationSeconds: null,
+        targetWeightKg: 60,
+      },
+    ],
+  };
+
+  it("accepts a single-op batch and surfaces it as a side effect, never writing anything", async () => {
+    vi.mocked(getUserRoutines).mockResolvedValue([PUSH_ROUTINE]);
+    vi.mocked(getRoutineDetail).mockResolvedValue(PUSH_DETAIL);
+
+    const result = await executeCoachTool(
+      "user-1",
+      "propose_action",
+      JSON.stringify({ summary: "Quitar Dips de Push", ops: [rawActionOp({ type: "remove_exercise", routineName: "Push", exerciseName: "Dips" })] }),
+    );
+
+    expect(result.sideEffect?.type).toBe("action_draft");
+    const facts = JSON.parse(result.output);
+    expect(facts.accepted).toBe(true);
+    expect(facts.draft.destructive).toBe(true);
+    expect(facts.draft.ops[0].exerciseId).toBe("ex-dips");
+  });
+
+  it("accepts a multi-op batch as one draft, not several", async () => {
+    vi.mocked(getUserRoutines).mockResolvedValue([PUSH_ROUTINE]);
+    vi.mocked(getRoutineDetail).mockResolvedValue(PUSH_DETAIL);
+
+    const result = await executeCoachTool(
+      "user-1",
+      "propose_action",
+      JSON.stringify({
+        summary: "Quitar Dips y poner Bench Press primero",
+        ops: [
+          rawActionOp({ type: "remove_exercise", routineName: "Push", exerciseName: "Dips" }),
+          rawActionOp({ type: "reorder_exercise", routineName: "Push", exerciseName: "Barbell Bench Press", toPosition: 1 }),
+        ],
+      }),
+    );
+
+    const facts = JSON.parse(result.output);
+    expect(facts.accepted).toBe(true);
+    expect(facts.draft.ops).toHaveLength(2);
+  });
+
+  it("never produces a side effect when a name is ambiguous -- only a fact for the model to ask about", async () => {
+    // Neither "Push A" nor "Push B" exactly matches the query "Push".
+    vi.mocked(getUserRoutines).mockResolvedValue([
+      { routineId: "r1", name: "Push A", sportName: null, exerciseCount: 2 },
+      { routineId: "r2", name: "Push B", sportName: null, exerciseCount: 1 },
+    ]);
+
+    const result = await executeCoachTool(
+      "user-1",
+      "propose_action",
+      JSON.stringify({ summary: "Quitar Dips de Push", ops: [rawActionOp({ type: "remove_exercise", routineName: "Push", exerciseName: "Dips" })] }),
+    );
+
+    expect(result.sideEffect).toBeUndefined();
+    const facts = JSON.parse(result.output);
+    expect(facts.resolved).toBe(false);
+    expect(facts.reason).toMatch(/Push/);
+  });
+
+  it("rejects with a reason and surfaces action_rejected when the routine doesn't exist", async () => {
+    vi.mocked(getUserRoutines).mockResolvedValue([]);
+
+    const result = await executeCoachTool(
+      "user-1",
+      "propose_action",
+      JSON.stringify({ summary: "Quitar Dips de Piernas", ops: [rawActionOp({ type: "remove_exercise", routineName: "Piernas", exerciseName: "Dips" })] }),
+    );
+
+    expect(result.sideEffect?.type).toBe("action_rejected");
+    const facts = JSON.parse(result.output);
+    expect(facts.accepted).toBe(false);
+  });
+});
+
+describe("propose_routine_draft tool with addToActivePlan", () => {
+  it("resolves the real active plan name server-side, never trusting a plan identity from the model", async () => {
+    vi.mocked(getActivePlan).mockResolvedValue({ id: "p1", name: "Rotación Fuerza 4 Días" });
+
+    const result = await executeCoachTool(
+      "user-1",
+      "propose_routine_draft",
+      JSON.stringify({
+        name: "Core rápido",
+        description: null,
+        addToActivePlan: true,
+        exercises: [
+          {
+            exerciseName: "Barbell Bench Press",
+            order: 1,
+            sets: 3,
+            targetType: "reps",
+            targetRepsMin: 6,
+            targetRepsMax: 8,
+            targetDurationSeconds: null,
+            targetWeightKg: null,
+            restSeconds: null,
+          },
+        ],
+      }),
+    );
+
+    const facts = JSON.parse(result.output);
+    expect(facts.draft.activePlanName).toBe("Rotación Fuerza 4 Días");
+  });
+
+  it("leaves activePlanName null when addToActivePlan is false", async () => {
+    const result = await executeCoachTool(
+      "user-1",
+      "propose_routine_draft",
+      JSON.stringify({
+        name: "Core rápido",
+        description: null,
+        addToActivePlan: false,
+        exercises: [
+          {
+            exerciseName: "Barbell Bench Press",
+            order: 1,
+            sets: 3,
+            targetType: "reps",
+            targetRepsMin: 6,
+            targetRepsMax: 8,
+            targetDurationSeconds: null,
+            targetWeightKg: null,
+            restSeconds: null,
+          },
+        ],
+      }),
+    );
+
+    const facts = JSON.parse(result.output);
+    expect(facts.draft.activePlanName).toBeNull();
   });
 });

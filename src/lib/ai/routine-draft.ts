@@ -27,6 +27,8 @@ export type RawRoutineDraft = {
   name: string;
   description: string | null;
   exercises: RawRoutineDraftExercise[];
+  /** Set from the user's own phrasing ("...y añádela a mi plan") -- never a plan identity, just intent. Resolved server-side against the real active plan in `toolProposeRoutineDraft` (tools.ts), never trusted beyond this boolean. */
+  addToActivePlan: boolean;
 };
 
 /** Same target shape `RoutineDetailExercise`/`NewRoutineExerciseTarget` already use -- no invented fields. */
@@ -47,6 +49,9 @@ export type RoutineDraft = {
   name: string;
   description: string | null;
   exercises: RoutineDraftExercise[];
+  addToActivePlan: boolean;
+  /** Resolved server-side (never from the LLM) -- null when `addToActivePlan` is false, or when it's true but the user has no active plan right now. */
+  activePlanName: string | null;
 };
 
 /**
@@ -62,6 +67,10 @@ export const ROUTINE_DRAFT_SCHEMA = {
   properties: {
     name: { type: "string" },
     description: { type: ["string", "null"] },
+    addToActivePlan: {
+      type: "boolean",
+      description: "true only if the user explicitly asked for the new routine to be added to their active plan.",
+    },
     exercises: {
       type: "array",
       items: {
@@ -92,7 +101,7 @@ export const ROUTINE_DRAFT_SCHEMA = {
       },
     },
   },
-  required: ["name", "description", "exercises"],
+  required: ["name", "description", "addToActivePlan", "exercises"],
   additionalProperties: false,
 } as const;
 
@@ -165,7 +174,14 @@ export async function resolveRoutineDraft(raw: RawRoutineDraft): Promise<Routine
   }
 
   return {
-    draft: { name: raw.name, description: raw.description, exercises: resolved },
+    draft: {
+      name: raw.name,
+      description: raw.description,
+      exercises: resolved,
+      addToActivePlan: raw.addToActivePlan,
+      // Resolved against the real active plan by the caller (toolProposeRoutineDraft in tools.ts, which has userId) -- never set here.
+      activePlanName: null,
+    },
     unresolvedNames: [],
   };
 }

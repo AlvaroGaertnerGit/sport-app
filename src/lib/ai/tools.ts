@@ -10,8 +10,10 @@ import { getTodayRecommendation } from "@/lib/domain/today";
 import type { ProgressionExerciseInput } from "@/lib/domain/progression";
 
 import { ROUTINE_DRAFT_SCHEMA, resolveExerciseByName, resolveRoutineDraft, validateRoutineDraft } from "./routine-draft";
+import { resolveAndValidateAction } from "./action-draft";
 import type { CoachToolDefinition } from "./provider";
 import type { RawRoutineDraft, RoutineDraft } from "./routine-draft";
+import type { CoachActionDraft, RawCoachAction } from "./action-draft";
 
 /**
  * Read-only tools (brief §11-18) plus one structured-output action tool
@@ -30,7 +32,11 @@ const MAX_SESSIONS_LIMIT = 20;
 export type CoachToolResult = {
   /** JSON string -- becomes the `function_call_output.output` sent back to the model. */
   output: string;
-  sideEffect?: { type: "routine_draft"; draft: RoutineDraft } | { type: "routine_draft_rejected"; reason: string };
+  sideEffect?:
+    | { type: "routine_draft"; draft: RoutineDraft }
+    | { type: "routine_draft_rejected"; reason: string }
+    | { type: "action_draft"; draft: CoachActionDraft }
+    | { type: "action_rejected"; reason: string };
 };
 
 function ok(data: unknown): CoachToolResult {
@@ -174,7 +180,7 @@ async function toolSearchExercises(args: { query: string }): Promise<CoachToolRe
   return ok(results.slice(0, 15).map((r) => ({ name: r.name, primaryMuscles: r.primaryMuscles })));
 }
 
-async function toolProposeRoutineDraft(raw: RawRoutineDraft): Promise<CoachToolResult> {
+async function toolProposeRoutineDraft(userId: string, raw: RawRoutineDraft): Promise<CoachToolResult> {
   const { draft, unresolvedNames } = await resolveRoutineDraft(raw);
   if (!draft) {
     const reason =
@@ -196,9 +202,91 @@ async function toolProposeRoutineDraft(raw: RawRoutineDraft): Promise<CoachToolR
     };
   }
 
+  // Resolved against the real active plan -- never trusts a plan identity
+  // from the model, only its `addToActivePlan` intent (brief §37/§38).
+  if (draft.addToActivePlan) {
+    const plan = await getActivePlan(userId);
+    draft.activePlanName = plan?.name ?? null;
+  }
+
   return {
     output: JSON.stringify({ accepted: true, draft }),
     sideEffect: { type: "routine_draft", draft },
+  };
+}
+
+/**
+ * Flat, every field nullable-not-optional -- matches `ROUTINE_DRAFT_SCHEMA`'s
+ * existing convention (OpenAI's `strict: true` requires every property
+ * listed in `required`, so "not applicable to this op type" is expressed
+ * as `null`, never an absent key). One tool, not seven, so a natural
+ * multi-step request ("quita fondos y pon press banca primero") becomes
+ * one `ops: [...]` batch with one preview and one confirmation, matching
+ * brief §16.
+ */
+export const PROPOSE_ACTION_SCHEMA = {
+  type: "object",
+  properties: {
+    summary: { type: "string" },
+    ops: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          type: {
+            type: "string",
+            enum: ["add_routine_to_plan", "add_exercise", "remove_exercise", "replace_exercise", "reorder_exercise", "update_exercise_target"],
+          },
+          routineName: { type: ["string", "null"] },
+          exerciseName: { type: ["string", "null"] },
+          newExerciseName: { type: ["string", "null"], description: "replace_exercise's destination exercise only." },
+          targetType: { type: ["string", "null"], enum: ["reps", "duration", null] },
+          targetSets: { type: ["integer", "null"] },
+          targetRepsMin: { type: ["integer", "null"] },
+          targetRepsMax: { type: ["integer", "null"] },
+          targetDurationSeconds: { type: ["integer", "null"] },
+          targetWeightKg: { type: ["number", "null"] },
+          restSeconds: { type: ["integer", "null"] },
+          toPosition: { type: ["integer", "null"], description: "reorder_exercise only, 1-based." },
+        },
+        required: [
+          "type",
+          "routineName",
+          "exerciseName",
+          "newExerciseName",
+          "targetType",
+          "targetSets",
+          "targetRepsMin",
+          "targetRepsMax",
+          "targetDurationSeconds",
+          "targetWeightKg",
+          "restSeconds",
+          "toPosition",
+        ],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ["summary", "ops"],
+  additionalProperties: false,
+} as const;
+
+async function toolProposeAction(userId: string, raw: RawCoachAction): Promise<CoachToolResult> {
+  const resolution = await resolveAndValidateAction(userId, raw);
+
+  if (resolution.status === "ambiguous") {
+    return ok({ resolved: false, reason: resolution.question });
+  }
+  if (resolution.status === "rejected") {
+    return {
+      output: JSON.stringify({ accepted: false, reason: resolution.reason }),
+      sideEffect: { type: "action_rejected", reason: resolution.reason },
+    };
+  }
+
+  return {
+    output: JSON.stringify({ accepted: true, draft: resolution.draft }),
+    sideEffect: { type: "action_draft", draft: resolution.draft },
   };
 }
 
@@ -266,8 +354,16 @@ export const COACH_TOOLS: CoachToolDefinition[] = [
     type: "function",
     name: "propose_routine_draft",
     description:
-      "Propone un borrador de rutina (Routine Draft) para que el usuario lo revise. NO crea nada en la base de datos. Usar exerciseName con nombres reales verificados con searchExercises -- si un ejercicio no existe en el catálogo, el draft será rechazado.",
+      "Propone un borrador de rutina NUEVA (Routine Draft) para que el usuario lo revise. NO crea nada en la base de datos. Usar exerciseName con nombres reales verificados con searchExercises -- si un ejercicio no existe en el catálogo, el draft será rechazado. Poner addToActivePlan a true solo si el usuario ha pedido explícitamente que la rutina se añada a su plan activo.",
     parameters: ROUTINE_DRAFT_SCHEMA,
+    strict: true,
+  },
+  {
+    type: "function",
+    name: "propose_action",
+    description:
+      "Propone uno o varios cambios sobre una rutina o plan YA EXISTENTES (añadir/quitar/sustituir/reordenar un ejercicio, cambiar sus series, o añadir una rutina al plan activo) para que el usuario los revise y confirme. NO escribe nada en la base de datos -- solo produce una propuesta. NUNCA usar para crear una rutina nueva (usar propose_routine_draft para eso). Usar nombres reales tal como los dice el usuario -- el servidor los resuelve contra los datos reales y pedirá aclaración si hay ambigüedad.",
+    parameters: PROPOSE_ACTION_SCHEMA,
     strict: true,
   },
 ];
@@ -289,7 +385,9 @@ export async function executeCoachTool(userId: string, name: string, argsJson: s
     case "searchExercises":
       return toolSearchExercises(args);
     case "propose_routine_draft":
-      return toolProposeRoutineDraft(args as RawRoutineDraft);
+      return toolProposeRoutineDraft(userId, args as RawRoutineDraft);
+    case "propose_action":
+      return toolProposeAction(userId, args as RawCoachAction);
     default:
       return ok({ error: `Unknown tool: ${name}` });
   }

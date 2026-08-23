@@ -6,6 +6,7 @@ import { buildSystemPrompt } from "./prompts";
 import { OpenAIProvider, type CoachInputItem, type CoachProvider } from "./provider";
 import { COACH_TOOLS, executeCoachTool } from "./tools";
 import type { RoutineDraft } from "./routine-draft";
+import type { CoachActionDraft } from "./action-draft";
 
 /**
  * Ties context + tools + provider together into one conversational turn
@@ -21,6 +22,9 @@ export type CoachTurnResult = {
   reply: string;
   draft: RoutineDraft | null;
   draftRejectedReason: string | null;
+  /** Ephemeral, per-turn only -- unlike `draft`, never round-tripped back as conversation context (see tools.ts's `propose_action` doc comment). */
+  actionDraft: CoachActionDraft | null;
+  actionRejectedReason: string | null;
   usage: { inputTokens: number; outputTokens: number; totalTokens: number } | null;
 };
 
@@ -47,6 +51,8 @@ export async function runCoachTurn(params: {
 
   let draft: RoutineDraft | null = null;
   let draftRejectedReason: string | null = null;
+  let actionDraft: CoachActionDraft | null = null;
+  let actionRejectedReason: string | null = null;
   let totalUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
   let sawUsage = false;
 
@@ -72,6 +78,8 @@ export async function runCoachTurn(params: {
         reply: reply || "No he podido generar una respuesta.",
         draft,
         draftRejectedReason,
+        actionDraft,
+        actionRejectedReason,
         usage: sawUsage ? totalUsage : null,
       };
     }
@@ -86,6 +94,11 @@ export async function runCoachTurn(params: {
         draftRejectedReason = null;
       } else if (toolResult.sideEffect?.type === "routine_draft_rejected") {
         draftRejectedReason = toolResult.sideEffect.reason;
+      } else if (toolResult.sideEffect?.type === "action_draft") {
+        actionDraft = toolResult.sideEffect.draft;
+        actionRejectedReason = null;
+      } else if (toolResult.sideEffect?.type === "action_rejected") {
+        actionRejectedReason = toolResult.sideEffect.reason;
       }
     }
   }
@@ -93,6 +106,8 @@ export async function runCoachTurn(params: {
   return {
     reply: "No he podido completar la respuesta -- inténtalo de nuevo con una pregunta más concreta.",
     draft,
+    actionDraft,
+    actionRejectedReason,
     draftRejectedReason,
     usage: sawUsage ? totalUsage : null,
   };

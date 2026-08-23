@@ -225,7 +225,11 @@ export async function movePlanItem(
  * constraint stops it, e.g. repeating a routine twice in a 4-day
  * rotation) — this never checks for that, by design.
  */
-export async function addRoutineToPlan(userId: string, planId: string, routineId: string): Promise<void> {
+export async function addRoutineToPlan(
+  userId: string,
+  planId: string,
+  routineId: string,
+): Promise<{ planItemId: string }> {
   const supabase = await createClient();
 
   const { data: plan, error: planError } = await supabase
@@ -257,12 +261,16 @@ export async function addRoutineToPlan(userId: string, planId: string, routineId
   const items = await getPlanItems(userId, planId);
   const nextOrder = items.length === 0 ? 1 : Math.max(...items.map((item) => item.order)) + 1;
 
-  const { error: insertError } = await supabase
+  const { data: inserted, error: insertError } = await supabase
     .from("plan_items")
-    .insert({ plan_id: planId, routine_id: routineId, order: nextOrder });
-  if (insertError) {
-    throw new Error(`addRoutineToPlan: ${insertError.message}`);
+    .insert({ plan_id: planId, routine_id: routineId, order: nextOrder })
+    .select("id")
+    .single();
+  if (insertError || !inserted) {
+    throw new Error(`addRoutineToPlan: ${insertError?.message ?? "insert returned no row"}`);
   }
+
+  return { planItemId: inserted.id };
 }
 
 export type CreatePlanResult =

@@ -56,6 +56,7 @@ describe("resolveRoutineDraft", () => {
     const raw = {
       name: "Push",
       description: null,
+      addToActivePlan: false,
       exercises: [
         {
           exerciseName: "Barbell Bench Press",
@@ -80,6 +81,7 @@ describe("resolveRoutineDraft", () => {
     const raw = {
       name: "Push",
       description: null,
+      addToActivePlan: false,
       exercises: [
         {
           exerciseName: "Quantum Flux Curl",
@@ -102,24 +104,26 @@ describe("resolveRoutineDraft", () => {
 
 describe("validateRoutineDraft", () => {
   it("accepts a well-formed draft", () => {
-    const result = validateRoutineDraft({ name: "Push", description: null, exercises: [draftExercise()] });
+    const result = validateRoutineDraft({ name: "Push", description: null, addToActivePlan: false, activePlanName: null, exercises: [draftExercise()] });
     expect(result.valid).toBe(true);
   });
 
   it("rejects an empty routine", () => {
-    const result = validateRoutineDraft({ name: "Push", description: null, exercises: [] });
+    const result = validateRoutineDraft({ name: "Push", description: null, addToActivePlan: false, activePlanName: null, exercises: [] });
     expect(result.valid).toBe(false);
     if (!result.valid) expect(result.errors.join(" ")).toMatch(/ejercicios/i);
   });
 
   it("rejects sets = 0", () => {
-    const result = validateRoutineDraft({ name: "Push", description: null, exercises: [draftExercise({ sets: 0 })] });
+    const result = validateRoutineDraft({ name: "Push", description: null, addToActivePlan: false, activePlanName: null, exercises: [draftExercise({ sets: 0 })] });
     expect(result.valid).toBe(false);
   });
 
   it("rejects a duration exercise with no duration", () => {
     const result = validateRoutineDraft({
       name: "Core",
+      addToActivePlan: false,
+      activePlanName: null,
       description: null,
       exercises: [
         draftExercise({
@@ -139,6 +143,8 @@ describe("validateRoutineDraft", () => {
     const result = validateRoutineDraft({
       name: "Push",
       description: null,
+      addToActivePlan: false,
+      activePlanName: null,
       exercises: [draftExercise({ targetRepsMin: 10, targetRepsMax: 5 })],
     });
     expect(result.valid).toBe(false);
@@ -148,6 +154,8 @@ describe("validateRoutineDraft", () => {
     const result = validateRoutineDraft({
       name: "Push",
       description: null,
+      addToActivePlan: false,
+      activePlanName: null,
       exercises: [draftExercise({ order: 1 }), draftExercise({ exerciseId: "ex-incline", order: 1 })],
     });
     expect(result.valid).toBe(false);

@@ -1,21 +1,33 @@
 "use client";
 
-import { useState } from "react";
+import { useActionState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 
 import { Button, FOCUS_RING_CLASSNAME } from "@/components/ui/button";
+import { ErrorText } from "@/components/ui/error-text";
 import { EYEBROW_CLASSNAME } from "@/components/ui/typography";
 import { formatExerciseTarget, formatWeightKg } from "@/lib/domain/exercise-progress";
 import type { RoutineDraft } from "@/lib/ai/routine-draft";
 
+import { confirmCreateRoutineAction } from "./actions";
+
+const INITIAL_STATE = undefined;
+
 /**
  * The Draft preview -- lines, not a chat bubble, matching every other list
- * in the app (session detail, routine config). "CREAR" does NOT write to
- * Supabase this phase (brief §35/§38): it only marks the draft as
- * confirmed-in-conversation, a purely local UI state. The real write is
- * next phase's job.
+ * in the app (session detail, routine config). "Crear" is a real write
+ * this phase (brief §12): confirms via `confirmCreateRoutineAction`, which
+ * re-resolves/re-validates the draft fresh before creating anything.
  */
 export function RoutineDraftPreview({ draft, onEditRequested }: { draft: RoutineDraft; onEditRequested: () => void }) {
-  const [confirmed, setConfirmed] = useState(false);
+  const [state, confirmAction, pending] = useActionState(confirmCreateRoutineAction, INITIAL_STATE);
+  const router = useRouter();
+
+  useEffect(() => {
+    if (state?.executed) {
+      router.refresh();
+    }
+  }, [state, router]);
 
   return (
     <div className="flex flex-col gap-4 border border-border p-4">
@@ -23,6 +35,9 @@ export function RoutineDraftPreview({ draft, onEditRequested }: { draft: Routine
         <p className={EYEBROW_CLASSNAME}>Routine draft</p>
         <p className="font-sans text-xl font-black text-foreground uppercase leading-tight">{draft.name}</p>
         {draft.description && <p className="text-sm text-muted-foreground">{draft.description}</p>}
+        {draft.addToActivePlan && draft.activePlanName && (
+          <p className="font-mono text-xs tracking-wide text-muted-foreground uppercase">Se añadirá a: {draft.activePlanName}</p>
+        )}
       </div>
 
       <div className="flex flex-col border-t border-border">
@@ -33,7 +48,10 @@ export function RoutineDraftPreview({ draft, onEditRequested }: { draft: Routine
               <span className="w-6 shrink-0 font-mono text-xs text-muted-foreground tabular-nums">
                 {String(exercise.order).padStart(2, "0")}
               </span>
-              <span className="min-w-0 flex-1 truncate font-sans font-bold text-foreground uppercase">
+              <span
+                title={exercise.exerciseName}
+                className="min-w-0 flex-1 truncate font-sans font-bold text-foreground uppercase"
+              >
                 {exercise.exerciseName}
               </span>
               <span className="shrink-0 font-mono text-xs tracking-wide text-muted-foreground uppercase">
@@ -44,24 +62,28 @@ export function RoutineDraftPreview({ draft, onEditRequested }: { draft: Routine
           ))}
       </div>
 
-      {confirmed ? (
-        <p className="text-sm text-muted-foreground">
-          Borrador listo. La creación real de la rutina llega en la próxima fase — de momento queda aquí, pendiente de
-          confirmación.
-        </p>
+      {state?.executed ? (
+        <p className="text-sm text-muted-foreground">{state.message}</p>
       ) : (
-        <div className="flex gap-3">
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={onEditRequested}
-            className={`min-h-11 w-auto flex-1 border border-border ${FOCUS_RING_CLASSNAME} focus-visible:outline-primary`}
-          >
-            Editar
-          </Button>
-          <Button type="button" onClick={() => setConfirmed(true)} className="min-h-11 w-auto flex-1 text-base">
-            Crear
-          </Button>
+        <div className="flex flex-col gap-2">
+          <div className="flex gap-3">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={onEditRequested}
+              disabled={pending}
+              className={`min-h-11 w-auto flex-1 border border-border ${FOCUS_RING_CLASSNAME} focus-visible:outline-primary`}
+            >
+              Editar
+            </Button>
+            <form action={confirmAction} className="flex-1">
+              <input type="hidden" name="routineDraftJson" value={JSON.stringify(draft)} />
+              <Button type="submit" disabled={pending} className="min-h-11 w-full text-base">
+                {pending ? "Creando…" : "Crear rutina"}
+              </Button>
+            </form>
+          </div>
+          {state?.error && <ErrorText center>{state.error}</ErrorText>}
         </div>
       )}
     </div>

@@ -46,7 +46,7 @@ describe("runCoachTurn", () => {
   });
 
   it("surfaces an accepted routine draft as a side effect, not as DB state", async () => {
-    const draft = { name: "Pecho", description: null, exercises: [] };
+    const draft = { name: "Pecho", description: null, addToActivePlan: false, activePlanName: null, exercises: [] };
     vi.mocked(executeCoachTool).mockResolvedValue({
       output: JSON.stringify({ accepted: true, draft }),
       sideEffect: { type: "routine_draft", draft },
@@ -84,5 +84,32 @@ describe("runCoachTurn", () => {
 
     expect(result.draft).toBeNull();
     expect(result.draftRejectedReason).toMatch(/Quantum Flux Curl/);
+  });
+
+  it("surfaces an accepted action draft as a side effect, not as DB state", async () => {
+    const draft = { summary: "Quitar Dips de Push", ops: [], destructive: true };
+    vi.mocked(executeCoachTool).mockResolvedValue({
+      output: JSON.stringify({ accepted: true, draft }),
+      sideEffect: { type: "action_draft", draft },
+    });
+
+    const provider = new MockCoachProvider([
+      { output: [{ type: "function_call", callId: "call_1", name: "propose_action", arguments: "{}" }], usage: null },
+      { output: [{ type: "message", text: "Te propongo este cambio." }], usage: null },
+    ]);
+
+    const result = await runCoachTurn({ userId: "u1", message: "Quita los fondos de Push", history: [], currentDraft: null, provider });
+
+    expect(result.actionDraft).toEqual(draft);
+    expect(result.actionRejectedReason).toBeNull();
+  });
+
+  it("never populates an action draft when no tool was called", async () => {
+    const provider = new MockCoachProvider([{ output: [{ type: "message", text: "Claro, dime qué quieres cambiar." }], usage: null }]);
+
+    const result = await runCoachTurn({ userId: "u1", message: "Hola", history: [], currentDraft: null, provider });
+
+    expect(result.actionDraft).toBeNull();
+    expect(result.actionRejectedReason).toBeNull();
   });
 });

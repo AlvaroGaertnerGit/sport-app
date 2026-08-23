@@ -34,10 +34,16 @@ export {
 export { getCoachSummary } from "./coach";
 export {
   addExerciseToRoutine,
+  createRoutine,
   getRoutineDetail,
   getRoutineExerciseCount,
   getUserRoutines,
   removeExerciseFromRoutine,
+  replaceExerciseInRoutine,
+  reorderRoutineExercise,
+  restoreRoutineExerciseAt,
+  updateRoutineExerciseTarget,
+  type NewRoutineInput,
 } from "./routines";
 export { getInProgressSession } from "./sessions";
 export { getTodayRecommendation } from "./today";
