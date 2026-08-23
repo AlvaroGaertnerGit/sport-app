@@ -3,7 +3,7 @@ import { DISPLAY_HEADING_CLASSNAME, EYEBROW_CLASSNAME } from "@/components/ui/ty
 import { LANDING_CONTAINER_CLASSNAME, LANDING_SECTION_CLASSNAME } from "./layout";
 import { Parallax } from "./motion/parallax";
 import { Reveal } from "./motion/reveal";
-import { PhoneMockup } from "./phone-mockup";
+import { ScreenshotBlock } from "./screenshot-block";
 
 /**
  * Shared shape for Planifica / Entrena / Mejora (brief §7-9) -- three
@@ -11,15 +11,19 @@ import { PhoneMockup } from "./phone-mockup";
  * bullet points, a real screenshot), differing only in content. A third
  * near-identical case is exactly the project's own "regla de tres" trigger
  * for extracting one component instead of copy-pasting three files.
- * `reverse` alternates the phone's side so the PLANIFICA → ENTRENA →
+ * `reverse` alternates the screenshot's side so the PLANIFICA → ENTRENA →
  * MEJORA reading rhythm doesn't feel mechanically repeated (brief §10).
- * The phone is the protagonist here (brief §11: ~45% text / 55% phone on
- * desktop) -- `md:basis-[45%]`/`md:basis-[55%]` express that split
+ * The screenshot is the protagonist here (brief §11: ~45% text / 55% image
+ * on desktop) -- `md:basis-[45%]`/`md:basis-[55%]` express that split
  * directly rather than leaving it to flex-1's implicit 50/50.
  *
- * Scroll entry: text reveals first, phone reveals slightly after with a
- * small scale-in (brief §22's own example); the phone also carries a
- * gentle scroll-linked Parallax independent of the reveal (brief §24).
+ * Scroll entry: text reveals first; the screenshot reveals slightly after
+ * with a small scale-in *and* a small lateral entrance from whichever side
+ * it visually sits on (`fromSide` mirrors `reverse`, so it always enters
+ * from its own side, never crosses over the text) -- landing v4's own take
+ * on brief §22's "screenshot entrando ligeramente desde un lateral." It
+ * also carries a gentle scroll-linked Parallax independent of the reveal
+ * (brief §24).
  */
 export function StorySection({
   id,
@@ -58,9 +62,14 @@ export function StorySection({
             </ul>
           </Reveal>
 
-          <Reveal delayMs={120} scale className="flex shrink-0 justify-center md:basis-[55%]">
+          <Reveal
+            delayMs={120}
+            scale
+            fromSide={reverse ? "left" : "right"}
+            className="flex shrink-0 justify-center md:basis-[55%]"
+          >
             <Parallax speed={0.08}>
-              <PhoneMockup src={screenshot.src} alt={screenshot.alt} />
+              <ScreenshotBlock src={screenshot.src} alt={screenshot.alt} />
             </Parallax>
           </Reveal>
         </div>

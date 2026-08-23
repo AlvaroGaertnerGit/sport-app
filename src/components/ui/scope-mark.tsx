@@ -3,10 +3,10 @@ import Image from "next/image";
 /**
  * The official SCOPE character -- the exact asset already generated for
  * the app icon (public/icon-512.png), reused as-is. Never re-rendered or
- * redrawn here: one source of truth for the mark, same rule the app's own
- * icon set already follows. Its background is already the project's own
- * near-black (`#080808`-adjacent), so it blends into the landing page's
- * dark background without needing a frame.
+ * redrawn here: one source of truth for the mark, shared by the landing
+ * (marketing) and the authenticated app's own Coach screen alike. Its
+ * background is already the project's own near-black (`#080808`-adjacent),
+ * so it blends into either surface's dark background without a frame.
  */
 export function ScopeMark({ size, className, priority }: { size: number; className?: string; priority?: boolean }) {
   return (

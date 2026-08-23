@@ -1,6 +1,6 @@
 export default function SessionsLoading() {
   return (
-    <div className="flex flex-1 flex-col gap-6 px-5 pt-6">
+    <div className="flex flex-1 flex-col gap-6 pt-6">
       <div className="h-3 w-32 animate-pulse rounded-full bg-muted" />
       <div className="flex flex-col gap-6">
         {[0, 1, 2, 3].map((i) => (

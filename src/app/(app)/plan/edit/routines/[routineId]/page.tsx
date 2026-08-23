@@ -26,7 +26,7 @@ export default async function ConfigureRoutinePage(props: PageProps<"/plan/edit/
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-8 px-5 pt-6 pb-10">
+    <div className="flex flex-1 flex-col gap-8 pt-6 pb-10">
       <Link
         href="/plan/edit"
         className={`inline-flex min-h-11 w-fit items-center font-mono text-xs tracking-wide text-muted-foreground uppercase transition-colors duration-150 hover:text-foreground ${FOCUS_RING_CLASSNAME} focus-visible:outline-primary`}

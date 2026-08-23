@@ -1,6 +1,6 @@
 export default function PlanLoading() {
   return (
-    <div className="flex flex-1 flex-col px-5 pt-8">
+    <div className="flex flex-1 flex-col pt-8">
       <div className="h-3 w-16 animate-pulse rounded-full bg-muted" />
       <div className="mt-10 flex flex-col gap-8">
         <div className="h-3 w-32 animate-pulse rounded-full bg-muted" />

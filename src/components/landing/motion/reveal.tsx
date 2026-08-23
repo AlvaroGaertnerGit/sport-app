@@ -17,10 +17,16 @@ import type { ReactNode } from "react";
  * the client also mounts hidden and only flips after the observer fires,
  * the same pattern every scroll-reveal implementation uses.
  */
+const FROM_SIDE_HIDDEN_CLASSNAME = {
+  left: "-translate-x-6",
+  right: "translate-x-6",
+} as const;
+
 export function Reveal({
   children,
   delayMs = 0,
   scale = false,
+  fromSide,
   className,
 }: {
   children: ReactNode;
@@ -28,6 +34,8 @@ export function Reveal({
   delayMs?: number;
   /** Adds a subtle scale(0.97) → 1 alongside the fade -- used for the phone mockups per brief §22. */
   scale?: boolean;
+  /** Adds a small (24px) horizontal entrance alongside the vertical one -- used for the product screenshots per the motion brief's "entrando ligeramente desde un lateral." Purely a CSS transform, so it composes with `scale`/`translate-y` in one `transition`, not a second animation. */
+  fromSide?: "left" | "right";
   className?: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -56,8 +64,8 @@ export function Reveal({
       style={{ transitionDelay: visible ? `${delayMs}ms` : "0ms" }}
       className={`transition-[opacity,transform] duration-700 ease-out ${
         visible
-          ? "translate-y-0 scale-100 opacity-100"
-          : `translate-y-6 opacity-0 ${scale ? "scale-[0.97]" : ""}`
+          ? "translate-x-0 translate-y-0 scale-100 opacity-100"
+          : `translate-y-6 opacity-0 ${scale ? "scale-[0.97]" : ""} ${fromSide ? FROM_SIDE_HIDDEN_CLASSNAME[fromSide] : ""}`
       } ${className ?? ""}`}
     >
       {children}

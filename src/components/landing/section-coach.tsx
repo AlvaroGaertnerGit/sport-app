@@ -3,8 +3,8 @@ import { DISPLAY_HEADING_CLASSNAME, EYEBROW_CLASSNAME } from "@/components/ui/ty
 import { LANDING_CONTAINER_CLASSNAME, LANDING_SECTION_CLASSNAME } from "./layout";
 import { Parallax } from "./motion/parallax";
 import { Reveal } from "./motion/reveal";
-import { PhoneMockup } from "./phone-mockup";
-import { ScopeMark } from "./scope-mark";
+import { ScreenshotBlock } from "./screenshot-block";
+import { ScopeMark } from "@/components/ui/scope-mark";
 
 const CAPABILITIES = [
   "Entender tu progreso real, no una sensación.",
@@ -15,22 +15,22 @@ const CAPABILITIES = [
 ] as const;
 
 /**
- * Brief §10: one of the most important sections, and the one place the
- * "propone / tú decides / confirmación" architecture has to be stated
- * plainly -- not as an implementation detail, as the actual pitch. SCOPE
- * appears here as the companion doing the proposing, not as decoration.
- * Phone-first on desktop (`md:flex-row-reverse`) -- brief §10's own
- * rhythm: "COACH IA: iPhone | Texto + SCOPE", the fourth beat alternating
- * back after Entrena already broke the text-first pattern. DOM order stays
- * text-then-phone regardless (same idea as StorySection's own `reverse`
- * prop) -- on mobile that's what keeps this section obeying brief §12's
- * fixed stacking ("Título ↓ Texto ↓ Teléfono", never phone-first, even
- * where a section is phone-first on desktop); it's also the more sensible
- * reading order for a screen reader, independent of the visual/desktop-only
- * reordering `md:flex-row-reverse` does.
+ * One of the most important sections, and the one place the "propone / tú
+ * decides / confirmación" architecture has to be stated plainly -- not as
+ * an implementation detail, as the actual pitch. SCOPE appears here as the
+ * companion doing the proposing, not as decoration. Screenshot-first on
+ * desktop (`md:flex-row-reverse`) -- "COACH IA: captura | Texto + SCOPE,"
+ * the fourth beat alternating back after Entrena already broke the
+ * text-first pattern. DOM order stays text-then-screenshot regardless
+ * (same idea as StorySection's own `reverse` prop) -- on mobile that's
+ * what keeps this section's fixed stacking ("Título ↓ Texto ↓ Captura,"
+ * never screenshot-first, even where a section is screenshot-first on
+ * desktop); it's also the more sensible reading order for a screen reader,
+ * independent of the visual/desktop-only reordering `md:flex-row-reverse`
+ * does.
  *
- * SCOPE gets its own, slightly faster Parallax than the phone (brief §25:
- * "Coach section: pequeño desplazamiento," independent of the phone's own
+ * SCOPE gets its own, slightly faster Parallax than the screenshot ("Coach
+ * section: pequeño desplazamiento," independent of the screenshot's own
  * movement) -- two separate `Parallax` instances, not one wrapping both.
  */
 export function SectionCoach() {
@@ -58,20 +58,25 @@ export function SectionCoach() {
               ))}
             </ul>
             <p className="mt-2 max-w-md rounded-md border border-border bg-elevated p-4 text-sm text-muted-foreground">
-              <span className="font-semibold text-foreground">El Coach propone. Tú decides.</span>{" "}
+              <span className="font-semibold text-foreground">SCOPE propone. Tú decides.</span>{" "}
               Cualquier cambio real sobre tu plan o tus rutinas se te muestra antes de aplicarse —
               nada se guarda sin que lo confirmes tú.
             </p>
           </Reveal>
 
-          <Reveal delayMs={120} scale className="flex shrink-0 flex-col items-center gap-6 md:basis-[55%]">
+          <Reveal
+            delayMs={120}
+            scale
+            fromSide="left"
+            className="flex shrink-0 flex-col items-center gap-6 md:basis-[55%]"
+          >
             <Parallax speed={0.1} maxOffsetPx={16}>
               <ScopeMark size={96} className="size-20 sm:size-24" />
             </Parallax>
             <Parallax speed={0.08}>
-              <PhoneMockup
+              <ScreenshotBlock
                 src="/marketing/coach.png"
-                alt="Resumen de progreso y sugerencias del Coach IA en Sport Coach"
+                alt="Resumen de progreso y sugerencias de SCOPE en Sport Coach"
               />
             </Parallax>
           </Reveal>

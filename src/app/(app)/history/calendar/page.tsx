@@ -70,7 +70,7 @@ export default async function CalendarPage(props: PageProps<"/history/calendar">
   const isCurrentMonth = year === now.getUTCFullYear() && month === now.getUTCMonth() + 1;
 
   return (
-    <div className="flex flex-1 flex-col gap-6 px-5 pt-6 pb-10">
+    <div className="flex flex-1 flex-col gap-6 pt-6 pb-10">
       <HistoryTabs current="calendar" trailing={<ProfileLink />} />
 
       <div className="flex flex-col gap-1">

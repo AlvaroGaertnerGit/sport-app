@@ -6,7 +6,7 @@ import { useState } from "react";
 import { Button, ButtonLink, FOCUS_RING_CLASSNAME } from "@/components/ui/button";
 
 import { LANDING_CONTAINER_CLASSNAME } from "./layout";
-import { ScopeMark } from "./scope-mark";
+import { ScopeMark } from "@/components/ui/scope-mark";
 
 const NAV_LINKS = [
   { href: "#funcionalidades", label: "Funcionalidades" },

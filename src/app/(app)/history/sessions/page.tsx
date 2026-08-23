@@ -10,7 +10,7 @@ export default async function SessionsPage() {
   const sessions = await getSessionHistory(user.id);
 
   return (
-    <div className="flex flex-1 flex-col gap-6 px-5 pt-6">
+    <div className="flex flex-1 flex-col gap-6 pt-6">
       <HistoryTabs current="sessions" trailing={<ProfileLink />} />
       {sessions.length === 0 ? (
         <section className="mt-10 flex animate-fade-in flex-col gap-3">

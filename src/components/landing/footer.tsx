@@ -2,7 +2,7 @@ import { EYEBROW_CLASSNAME } from "@/components/ui/typography";
 
 import { LANDING_CONTAINER_CLASSNAME } from "./layout";
 import { Parallax } from "./motion/parallax";
-import { ScopeMark } from "./scope-mark";
+import { ScopeMark } from "@/components/ui/scope-mark";
 
 export function LandingFooter() {
   return (

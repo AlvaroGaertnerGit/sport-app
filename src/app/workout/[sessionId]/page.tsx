@@ -27,7 +27,7 @@ export default async function WorkoutSessionPage(props: PageProps<"/workout/[ses
   if (session.status !== "in_progress") {
     const isCompleted = session.status === "completed";
     return (
-      <main className="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center gap-4 px-5 text-center">
+      <main className="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center gap-4 px-6 text-center">
         {isCompleted && (
           <span aria-hidden="true" className="flex size-14 items-center justify-center rounded-full bg-success text-2xl font-bold text-success-foreground">
             ✓

@@ -1,4 +1,5 @@
 import { ProfileLink } from "@/components/app-shell/profile-link";
+import { ScopeMark } from "@/components/ui/scope-mark";
 import { EYEBROW_CLASSNAME } from "@/components/ui/typography";
 import { requireUser } from "@/lib/auth/dal";
 import { getCoachSummary } from "@/lib/domain";
@@ -21,9 +22,15 @@ export default async function CoachPage() {
   const aiAvailable = isCoachAIConfigured();
 
   return (
-    <div className="flex flex-1 flex-col px-5 pt-8 pb-10">
+    <div className="flex flex-1 flex-col pt-8 pb-10">
       <div className="flex items-center justify-between">
-        <p className={EYEBROW_CLASSNAME}>Coach</p>
+        <div className="flex items-center gap-3">
+          <ScopeMark size={44} priority className="size-11 shrink-0" />
+          <div className="flex flex-col">
+            <p className={EYEBROW_CLASSNAME}>Scope</p>
+            <p className="font-sans text-lg leading-none font-bold text-foreground uppercase">Tu Coach</p>
+          </div>
+        </div>
         <ProfileLink />
       </div>
       <div className="mt-8">
@@ -35,9 +42,9 @@ export default async function CoachPage() {
         </div>
       ) : (
         <div className="mt-8 flex flex-col gap-2 border-t border-border pt-6">
-          <p className={EYEBROW_CLASSNAME}>Conversar con Coach</p>
+          <p className={EYEBROW_CLASSNAME}>Conversar con Scope</p>
           <p className="text-sm text-muted-foreground">
-            La conversación con el Coach IA no está disponible todavía en este entorno.
+            La conversación con SCOPE no está disponible todavía en este entorno.
           </p>
         </div>
       )}

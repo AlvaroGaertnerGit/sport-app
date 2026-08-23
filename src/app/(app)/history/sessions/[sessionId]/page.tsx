@@ -24,7 +24,7 @@ export default async function SessionDetailPage(props: PageProps<"/history/sessi
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-6 px-5 pt-6 pb-10">
+    <div className="flex flex-1 flex-col gap-6 pt-6 pb-10">
       <Link
         href="/history/sessions"
         className="inline-flex min-h-11 w-fit items-center font-mono text-xs tracking-wide text-muted-foreground uppercase transition-colors duration-150 hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"

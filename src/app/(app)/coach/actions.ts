@@ -58,7 +58,7 @@ export async function confirmCreateRoutineAction(_prevState: CoachWriteState, fo
   for (const exercise of submitted.exercises) {
     const match = await resolveExerciseByName(exercise.exerciseName);
     if (!match) {
-      return { error: `"${exercise.exerciseName}" ya no está disponible en el catálogo. Pídele a Coach que proponga la rutina de nuevo.` };
+      return { error: `"${exercise.exerciseName}" ya no está disponible en el catálogo. Pídele a SCOPE que proponga la rutina de nuevo.` };
     }
     resolvedExercises.push({ ...exercise, exerciseId: match.exerciseId, exerciseName: match.name });
   }
@@ -143,13 +143,13 @@ export async function confirmCoachActionAction(_prevState: CoachWriteState, form
   const fresh = await resolveAndValidateAction(user.id, toRawAction(submitted));
 
   if (fresh.status === "ambiguous") {
-    return { error: "Esto se ha vuelto ambiguo desde que te lo propuse -- pídeselo de nuevo a Coach." };
+    return { error: "Esto se ha vuelto ambiguo desde que te lo propuse -- pídeselo de nuevo a SCOPE." };
   }
   if (fresh.status === "rejected") {
     return { error: fresh.reason };
   }
   if (!draftsMatch(fresh.draft, submitted)) {
-    return { error: "Esto ha cambiado desde que te lo propuse. Pídeselo de nuevo a Coach para ver el estado actual." };
+    return { error: "Esto ha cambiado desde que te lo propuse. Pídeselo de nuevo a SCOPE para ver el estado actual." };
   }
 
   const result = await executeCoachActionOps(user.id, fresh.draft.ops);

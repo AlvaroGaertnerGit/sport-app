@@ -1,6 +1,6 @@
 export default function CoachLoading() {
   return (
-    <div className="flex flex-1 flex-col gap-8 px-5 pt-8">
+    <div className="flex flex-1 flex-col gap-8 pt-8">
       <div className="flex items-center justify-between">
         <div className="h-3 w-16 animate-pulse rounded-full bg-muted" />
         <div className="size-11 animate-pulse rounded-md bg-muted" />

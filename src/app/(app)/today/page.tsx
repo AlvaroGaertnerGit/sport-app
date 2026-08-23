@@ -27,7 +27,7 @@ export default async function TodayPage() {
   const greeting = profile?.display_name ? `Hola, ${profile.display_name}` : "Hola";
 
   return (
-    <div className="flex flex-1 flex-col px-5 pt-8">
+    <div className="flex flex-1 flex-col pt-8">
       <div className={`flex items-center justify-between ${EYEBROW_CLASSNAME}`}>
         <span>{greeting}</span>
         <ProfileLink />

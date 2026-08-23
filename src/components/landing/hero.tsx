@@ -4,7 +4,7 @@ import { DISPLAY_HEADING_CLASSNAME, EYEBROW_CLASSNAME } from "@/components/ui/ty
 import { LANDING_CONTAINER_CLASSNAME } from "./layout";
 import { Parallax } from "./motion/parallax";
 import { Reveal } from "./motion/reveal";
-import { ScopeMark } from "./scope-mark";
+import { ScopeMark } from "@/components/ui/scope-mark";
 
 /**
  * The most important section on the page (brief §4). SCOPE appears here,

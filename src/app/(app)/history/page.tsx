@@ -30,7 +30,7 @@ export default async function ProgressPage(props: PageProps<"/history">) {
   const improving = selectImprovingHighlights(planProgressions);
 
   return (
-    <div className="flex flex-1 flex-col gap-6 px-5 pt-6">
+    <div className="flex flex-1 flex-col gap-6 pt-6">
       <HistoryTabs current="progress" trailing={<ProfileLink />} />
       <PeriodTabs current={period} />
       {/* Keyed on period so switching tabs replays the entrance animation

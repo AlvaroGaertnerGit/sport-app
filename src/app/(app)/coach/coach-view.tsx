@@ -14,7 +14,7 @@ export function CoachView({ summary }: { summary: CoachSummary }) {
       <section className="mt-10 flex animate-fade-in flex-col gap-3">
         <h2 className="text-2xl font-bold text-foreground">Aún no hay datos</h2>
         <p className="text-sm text-muted-foreground">
-          Completa tu primer entrenamiento para que el Coach pueda decir algo útil.
+          Completa tu primer entrenamiento para que SCOPE pueda decir algo útil.
         </p>
       </section>
     );

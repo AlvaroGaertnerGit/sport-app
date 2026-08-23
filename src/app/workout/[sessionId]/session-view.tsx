@@ -194,7 +194,7 @@ export function WorkoutSessionView({
     // still needs real clearance there. `pb-10` alone was already correct
     // for a normal browser tab; this adds the device's own inset on top of
     // it (0 wherever there's no notch/indicator, so nothing changes there).
-    <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-2 px-5 pt-6 pb-[calc(2.5rem+env(safe-area-inset-bottom))]">
+    <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-2 px-6 pt-6 pb-[calc(2.5rem+env(safe-area-inset-bottom))]">
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between font-mono text-xs tracking-wide uppercase">
           <Link

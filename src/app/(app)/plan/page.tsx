@@ -20,7 +20,7 @@ export default async function PlanPage() {
 
   if (!plan) {
     return (
-      <div className="flex flex-1 flex-col px-5 pt-8">
+      <div className="flex flex-1 flex-col pt-8">
         <div className="flex items-center justify-between">
           <p className={EYEBROW_CLASSNAME}>Plan</p>
           <ProfileLink />
@@ -40,7 +40,7 @@ export default async function PlanPage() {
   const next = pickNextPlanItem(items, lastCompletedOrder);
 
   return (
-    <div className="flex flex-1 flex-col px-5 pt-8">
+    <div className="flex flex-1 flex-col pt-8">
       <div className="flex items-center justify-between">
         <p className={EYEBROW_CLASSNAME}>Plan</p>
         <div className="flex items-center gap-1">

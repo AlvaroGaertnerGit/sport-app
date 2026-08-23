@@ -15,7 +15,7 @@ export default async function ProfilePage() {
   const profile = await getCurrentProfile();
 
   return (
-    <div className="flex flex-1 flex-col gap-8 px-5 pt-8">
+    <div className="flex flex-1 flex-col gap-8 pt-8">
       <h1 className={DISPLAY_HEADING_CLASSNAME} style={{ fontSize: "clamp(2rem, 9vw, 3rem)" }}>
         Perfil
       </h1>

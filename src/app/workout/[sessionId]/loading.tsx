@@ -1,7 +1,7 @@
 /** Same skeleton convention as today/loading.tsx -- getWorkoutSession does two Supabase reads before this page can render anything. */
 export default function WorkoutSessionLoading() {
   return (
-    <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-2 px-5 pt-6 pb-10">
+    <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-2 px-6 pt-6 pb-10">
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <div className="h-3 w-12 animate-pulse rounded-full bg-muted" />

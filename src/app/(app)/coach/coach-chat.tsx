@@ -172,7 +172,7 @@ export function CoachChat() {
 
   return (
     <div className="flex flex-col gap-6 border-t border-border pt-6">
-      <p className={EYEBROW_CLASSNAME}>Conversar con Coach</p>
+      <p className={EYEBROW_CLASSNAME}>Conversar con Scope</p>
 
       {turns.length === 0 && (
         <div className="flex flex-col gap-2">
@@ -199,7 +199,10 @@ export function CoachChat() {
               </p>
             ) : (
               <div key={index} className="flex flex-col gap-4">
-                <p className="whitespace-pre-wrap text-base text-foreground">{turn.content}</p>
+                <div className="flex flex-col gap-1.5">
+                  <p className={EYEBROW_CLASSNAME}>Scope</p>
+                  <p className="whitespace-pre-wrap text-base text-foreground">{turn.content}</p>
+                </div>
                 {turn.draft &&
                   (index === lastDraftIndex || turn.draftDismissed ? (
                     <RoutineDraftPreview
@@ -247,7 +250,7 @@ export function CoachChat() {
       >
         <div className="flex-1">
           <label htmlFor="coach-composer" className="sr-only">
-            Escribe a Coach
+            Escribe a Scope
           </label>
           <textarea
             id="coach-composer"
@@ -255,7 +258,7 @@ export function CoachChat() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Escribe a Coach…"
+            placeholder="Escribe a SCOPE…"
             rows={1}
             disabled={pending}
             className={TEXTAREA_CLASSNAME}
