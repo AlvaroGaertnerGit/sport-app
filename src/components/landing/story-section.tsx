@@ -1,7 +1,9 @@
 import { DISPLAY_HEADING_CLASSNAME, EYEBROW_CLASSNAME } from "@/components/ui/typography";
 
 import { LANDING_CONTAINER_CLASSNAME, LANDING_SECTION_CLASSNAME } from "./layout";
-import { PhoneShot } from "./phone-shot";
+import { Parallax } from "./motion/parallax";
+import { Reveal } from "./motion/reveal";
+import { PhoneMockup } from "./phone-mockup";
 
 /**
  * Shared shape for Planifica / Entrena / Mejora (brief §7-9) -- three
@@ -9,8 +11,15 @@ import { PhoneShot } from "./phone-shot";
  * bullet points, a real screenshot), differing only in content. A third
  * near-identical case is exactly the project's own "regla de tres" trigger
  * for extracting one component instead of copy-pasting three files.
- * `reverse` alternates the screenshot side so the PLANIFICA → ENTRENA →
- * MEJORA reading rhythm doesn't feel mechanically repeated.
+ * `reverse` alternates the phone's side so the PLANIFICA → ENTRENA →
+ * MEJORA reading rhythm doesn't feel mechanically repeated (brief §10).
+ * The phone is the protagonist here (brief §11: ~45% text / 55% phone on
+ * desktop) -- `md:basis-[45%]`/`md:basis-[55%]` express that split
+ * directly rather than leaving it to flex-1's implicit 50/50.
+ *
+ * Scroll entry: text reveals first, phone reveals slightly after with a
+ * small scale-in (brief §22's own example); the phone also carries a
+ * gentle scroll-linked Parallax independent of the reveal (brief §24).
  */
 export function StorySection({
   id,
@@ -33,9 +42,9 @@ export function StorySection({
     <section id={id} className={LANDING_SECTION_CLASSNAME}>
       <div className={LANDING_CONTAINER_CLASSNAME}>
         <div
-          className={`flex flex-col items-center gap-10 sm:gap-16 ${reverse ? "sm:flex-row-reverse" : "sm:flex-row"}`}
+          className={`flex flex-col items-center gap-10 md:gap-16 ${reverse ? "md:flex-row-reverse" : "md:flex-row"}`}
         >
-          <div className="flex flex-1 flex-col items-start gap-5">
+          <Reveal className="flex min-w-0 flex-col items-start gap-5 md:basis-[45%]">
             <p className={EYEBROW_CLASSNAME}>{eyebrow}</p>
             <h2 className={`${DISPLAY_HEADING_CLASSNAME} text-3xl sm:text-4xl`}>{heading}</h2>
             <p className="max-w-md text-base leading-relaxed text-muted-foreground">{lead}</p>
@@ -47,11 +56,13 @@ export function StorySection({
                 </li>
               ))}
             </ul>
-          </div>
+          </Reveal>
 
-          <div className="flex shrink-0 justify-center">
-            <PhoneShot src={screenshot.src} alt={screenshot.alt} />
-          </div>
+          <Reveal delayMs={120} scale className="flex shrink-0 justify-center md:basis-[55%]">
+            <Parallax speed={0.08}>
+              <PhoneMockup src={screenshot.src} alt={screenshot.alt} />
+            </Parallax>
+          </Reveal>
         </div>
       </div>
     </section>

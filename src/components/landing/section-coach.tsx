@@ -1,7 +1,9 @@
 import { DISPLAY_HEADING_CLASSNAME, EYEBROW_CLASSNAME } from "@/components/ui/typography";
 
 import { LANDING_CONTAINER_CLASSNAME, LANDING_SECTION_CLASSNAME } from "./layout";
-import { PhoneShot } from "./phone-shot";
+import { Parallax } from "./motion/parallax";
+import { Reveal } from "./motion/reveal";
+import { PhoneMockup } from "./phone-mockup";
 import { ScopeMark } from "./scope-mark";
 
 const CAPABILITIES = [
@@ -17,13 +19,26 @@ const CAPABILITIES = [
  * "propone / tú decides / confirmación" architecture has to be stated
  * plainly -- not as an implementation detail, as the actual pitch. SCOPE
  * appears here as the companion doing the proposing, not as decoration.
+ * Phone-first on desktop (`md:flex-row-reverse`) -- brief §10's own
+ * rhythm: "COACH IA: iPhone | Texto + SCOPE", the fourth beat alternating
+ * back after Entrena already broke the text-first pattern. DOM order stays
+ * text-then-phone regardless (same idea as StorySection's own `reverse`
+ * prop) -- on mobile that's what keeps this section obeying brief §12's
+ * fixed stacking ("Título ↓ Texto ↓ Teléfono", never phone-first, even
+ * where a section is phone-first on desktop); it's also the more sensible
+ * reading order for a screen reader, independent of the visual/desktop-only
+ * reordering `md:flex-row-reverse` does.
+ *
+ * SCOPE gets its own, slightly faster Parallax than the phone (brief §25:
+ * "Coach section: pequeño desplazamiento," independent of the phone's own
+ * movement) -- two separate `Parallax` instances, not one wrapping both.
  */
 export function SectionCoach() {
   return (
     <section className={`${LANDING_SECTION_CLASSNAME} border-t border-border/60`}>
       <div className={LANDING_CONTAINER_CLASSNAME}>
-        <div className="flex flex-col items-center gap-10 sm:flex-row sm:gap-16">
-          <div className="flex flex-1 flex-col items-start gap-5">
+        <div className="flex flex-col items-center gap-10 md:flex-row-reverse md:gap-16">
+          <Reveal className="flex min-w-0 flex-col items-start gap-5 md:basis-[45%]">
             <p className={EYEBROW_CLASSNAME}>Coach IA</p>
             <h2 className={`${DISPLAY_HEADING_CLASSNAME} text-3xl sm:text-4xl`}>
               Tu coach.
@@ -47,12 +62,19 @@ export function SectionCoach() {
               Cualquier cambio real sobre tu plan o tus rutinas se te muestra antes de aplicarse —
               nada se guarda sin que lo confirmes tú.
             </p>
-          </div>
+          </Reveal>
 
-          <div className="flex shrink-0 flex-col items-center gap-6">
-            <ScopeMark size={96} className="size-20 sm:size-24" />
-            <PhoneShot src="/marketing/coach.jpg" alt="Resumen de progreso y sugerencias del Coach IA en Sport Coach" />
-          </div>
+          <Reveal delayMs={120} scale className="flex shrink-0 flex-col items-center gap-6 md:basis-[55%]">
+            <Parallax speed={0.1} maxOffsetPx={16}>
+              <ScopeMark size={96} className="size-20 sm:size-24" />
+            </Parallax>
+            <Parallax speed={0.08}>
+              <PhoneMockup
+                src="/marketing/coach.png"
+                alt="Resumen de progreso y sugerencias del Coach IA en Sport Coach"
+              />
+            </Parallax>
+          </Reveal>
         </div>
       </div>
     </section>

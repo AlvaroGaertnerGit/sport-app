@@ -1,0 +1,97 @@
+<!--
+  Sport Coach — "Confirm signup" email template.
+
+  WHERE THIS GOES (manual step, cannot be applied from code):
+  Supabase Dashboard → Authentication → Email Templates → "Confirm signup"
+  → paste this entire file into the template body, replacing the default.
+
+  Uses Supabase's own official Next.js/SSR-app pattern (verified against
+  current Supabase docs, not invented): the confirmation link points at
+  this app's own /auth/confirm route (src/app/auth/confirm/route.ts) with
+  token_hash + type + next, rather than Supabase's default hosted
+  confirmation page -- required so the session cookie ends up set through
+  this app's own SSR client. {{ .SiteURL }} is Dashboard "Site URL" config
+  (Authentication → URL Configuration) -- must be the real production
+  domain for this link (and the SCOPE image below) to resolve correctly;
+  see the phase's final report for the exact value.
+
+  Design constraints this file follows (brief §10-11):
+  - Table-based layout, inline styles only -- no <style> block, since
+    Gmail strips <head> styles and many clients strip embedded CSS.
+  - The button is a solid-color table cell, not a background-image or a
+    <button> -- still fully clickable if the email client strips CSS.
+  - The SCOPE image has explicit width/height and real alt text, so the
+    email stays legible and functional with images blocked (the default
+    in Gmail/Outlook until a recipient clicks "show images").
+  - System font stack only (Arial/Helvetica) -- no @font-face, no Google
+    Fonts link; email clients don't reliably load either.
+-->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#080808" style="background-color:#080808;">
+  <tr>
+    <td align="center" style="padding: 40px 20px;">
+      <table role="presentation" width="480" cellpadding="0" cellspacing="0" border="0" style="max-width:480px; width:100%;">
+
+        <!-- SCOPE mark -->
+        <tr>
+          <td align="center" style="padding-bottom: 24px;">
+            <img
+              src="{{ .SiteURL }}/icon-192.png"
+              width="64"
+              height="64"
+              alt="SCOPE"
+              style="display:block; border:0; border-radius: 14px; width:64px; height:64px;"
+            />
+          </td>
+        </tr>
+
+        <!-- Card -->
+        <tr>
+          <td bgcolor="#141414" style="background-color:#141414; border:1px solid #292929; border-radius: 12px; padding: 32px 28px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td align="center" style="font-family: Arial, Helvetica, sans-serif; font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: #8a8a8a; padding-bottom: 12px;">
+                  Sport Coach
+                </td>
+              </tr>
+              <tr>
+                <td align="center" style="font-family: Arial, Helvetica, sans-serif; font-size: 26px; font-weight: 900; text-transform: uppercase; color: #f4f3ee; padding-bottom: 16px; line-height: 1.15;">
+                  Confirma tu cuenta
+                </td>
+              </tr>
+              <tr>
+                <td align="center" style="font-family: Arial, Helvetica, sans-serif; font-size: 15px; line-height: 1.6; color: #b8b6b0; padding-bottom: 28px;">
+                  Ya casi estás dentro de Sport Coach. Confirma tu email para activar tu cuenta y empezar a entrenar.
+                </td>
+              </tr>
+              <tr>
+                <td align="center" style="padding-bottom: 8px;">
+                  <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                    <tr>
+                      <td align="center" bgcolor="#ff3045" style="background-color:#ff3045; border-radius: 6px;">
+                        <a
+                          href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email&next={{ .RedirectTo }}"
+                          target="_blank"
+                          style="display:inline-block; padding: 14px 32px; font-family: Arial, Helvetica, sans-serif; font-size: 16px; font-weight: 700; color: #ffffff; text-decoration: none;"
+                        >
+                          Confirmar mi email
+                        </a>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- Footer -->
+        <tr>
+          <td align="center" style="font-family: Arial, Helvetica, sans-serif; font-size: 12px; line-height: 1.6; color: #6e6b65; padding-top: 24px;">
+            Si no has creado esta cuenta, puedes ignorar este correo.
+          </td>
+        </tr>
+
+      </table>
+    </td>
+  </tr>
+</table>

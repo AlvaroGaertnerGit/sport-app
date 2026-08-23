@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 
 import { ServiceWorkerRegistration } from "@/components/app-shell/service-worker-registration";
+import { SITE_URL } from "@/lib/site-url";
 
 import "./globals.css";
 
@@ -17,10 +18,10 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   // Resolves relative Open Graph/Twitter image URLs (used by the public
-  // landing, src/app/page.tsx) into absolute ones. No real production
-  // domain exists yet -- falls back to localhost rather than inventing one;
-  // set NEXT_PUBLIC_SITE_URL once the app has a real deployed URL.
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
+  // landing, src/app/page.tsx) into absolute ones. Production (Vercel) must
+  // set NEXT_PUBLIC_SITE_URL -- see src/lib/site-url.ts's own comment for
+  // why this can't be hardcoded here.
+  metadataBase: new URL(SITE_URL),
   title: "Sport Coach",
   description: "Entrenamiento guiado, planificado por rotación.",
   // `capable`/`statusBarStyle` cover iOS Safari versions that don't read

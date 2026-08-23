@@ -2,6 +2,8 @@
 
 import { redirect } from "next/navigation";
 
+import { safeRedirectTarget } from "@/lib/auth/safe-redirect";
+import { SITE_URL } from "@/lib/site-url";
 import { createClient } from "@/lib/supabase/server";
 
 /**
@@ -18,19 +20,6 @@ export type AuthFormState =
       message?: string;
     }
   | undefined;
-
-/**
- * Only ever redirect within our own app. `redirectTo` arrives as form data
- * (ultimately from a query param on /login), so it must be treated as
- * untrusted input — without this check it would be an open-redirect
- * vulnerability.
- */
-function safeRedirectTarget(path: string): string {
-  if (path.startsWith("/") && !path.startsWith("//")) {
-    return path;
-  }
-  return "/today";
-}
 
 /**
  * Maps a Supabase Auth error to a short, safe message. Never forwards
@@ -80,7 +69,17 @@ export async function signUpAction(
   const supabase = await createClient();
 
   try {
-    const { data, error } = await supabase.auth.signUp({ email, password });
+    // `emailRedirectTo` becomes the confirmation email template's
+    // `{{ .RedirectTo }}` variable -- the final in-app destination after
+    // `/auth/confirm` verifies the token. The email's *domain* comes from
+    // Supabase Dashboard's own "Site URL" setting (not overridable per
+    // call, see the README/final report for why) -- this only controls
+    // the path Supabase appends after that.
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { emailRedirectTo: `${SITE_URL}/today` },
+    });
 
     if (error) {
       return { error: mapAuthError(error) };
