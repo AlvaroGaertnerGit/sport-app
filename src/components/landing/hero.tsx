@@ -1,23 +1,27 @@
+import { ScopeDock, ScopeGreeting } from "@/components/scope/companion";
 import { ButtonArrow, ButtonLink } from "@/components/ui/button";
 import { DISPLAY_HEADING_CLASSNAME, EYEBROW_CLASSNAME } from "@/components/ui/typography";
 
 import { LANDING_CONTAINER_CLASSNAME } from "./layout";
-import { Parallax } from "./motion/parallax";
 import { Reveal } from "./motion/reveal";
-import { ScopeMark } from "@/components/ui/scope-mark";
 
 /**
- * The most important section on the page (brief §4). SCOPE appears here,
- * large -- but the headline is about Sport Coach, not about the character,
- * per the brief's explicit "SCOPE es la mascota, Sport Coach es el
- * producto." Still a Server Component -- Reveal/Parallax are the only
- * client leaves involved, composed as children the same way any Client
- * Component can be used inside a Server Component.
+ * The most important section on the page (brief §4). Scope appears here,
+ * large and *alive* -- the real companion character (src/components/scope/),
+ * not the static ScopeMark -- but the headline is about Sport Coach, not
+ * about the character, per the brief's explicit "SCOPE es la mascota,
+ * Sport Coach es el producto." Still a Server Component -- Reveal and
+ * ScopeDock/ScopeGreeting (client leaves) are composed as children the
+ * same way any Client Component can be used inside a Server Component.
  *
- * The entry animation triggers on load, not on scroll, because Hero sits
- * above the fold -- Reveal's IntersectionObserver simply fires the moment
- * it mounts already-visible, giving exactly the "entrada del texto/SCOPE"
- * brief §26 asks for without a separate on-mount code path.
+ * The text's entry animation triggers on load, not on scroll, because Hero
+ * sits above the fold -- Reveal's IntersectionObserver simply fires the
+ * moment it mounts already-visible. Scope's own dock slot is deliberately
+ * NOT wrapped in Reveal/Parallax -- see ScopeDock's own header comment for
+ * why a competing transform on the dock slot would strand the companion at
+ * its pre-animation offset; Scope is simply present from first paint here,
+ * which also matches how the reference character always reads at its own
+ * Hero placement (instant, above the fold, not a scroll-reveal).
  */
 export function Hero() {
   return (
@@ -59,11 +63,14 @@ export function Hero() {
           </Reveal>
         </div>
 
-        <Reveal delayMs={120} scale className="shrink-0 self-center">
-          <Parallax speed={0.06} maxOffsetPx={18}>
-            <ScopeMark size={240} priority className="size-40 sm:size-48 md:size-56 lg:size-64" />
-          </Parallax>
-        </Reveal>
+        <div className="flex shrink-0 flex-col items-center gap-3 self-center">
+          <ScopeDock
+            id="hero"
+            config={{ mood: "idle", scale: 1.15 }}
+            className="size-40 sm:size-48 md:size-56 lg:size-64"
+          />
+          <ScopeGreeting />
+        </div>
       </div>
     </section>
   );

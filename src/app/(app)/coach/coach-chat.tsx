@@ -1,10 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
 import { Button, FOCUS_RING_CLASSNAME } from "@/components/ui/button";
 import { ErrorText } from "@/components/ui/error-text";
 import { EYEBROW_CLASSNAME } from "@/components/ui/typography";
+import { Scope } from "@/components/scope/scope";
+import { SCOPE_HAPPY_HOLD_MS } from "@/components/scope/scope-motion";
+import type { ScopeMood } from "@/components/scope/scope.types";
 import type { RoutineDraft } from "@/lib/ai/routine-draft";
 import type { CoachActionDraft } from "@/lib/ai/action-draft";
 
@@ -35,7 +38,10 @@ type Turn = {
  * ("revisando tu recuperación…") that might not be true; every stage below
  * is true regardless of what the model is actually doing server-side. Time
  * thresholds, not per-request events -- a fixed, small set of stages, not a
- * message that keeps changing every second.
+ * message that keeps changing every second. SCOPE's own "thinking" motion
+ * (Scope, src/components/scope/) is the primary visual signal now; this text stays as the
+ * accessible, always-present backup (§17: motion is never the only way to
+ * know the state).
  */
 const THINKING_STAGES: { afterMs: number; text: string }[] = [
   { afterMs: 0, text: "Pensando…" },
@@ -45,21 +51,37 @@ const THINKING_STAGES: { afterMs: number; text: string }[] = [
 ];
 
 /**
- * The whole AI conversation surface -- talks to `/api/coach` only (never
- * Supabase, never OpenAI directly, see route.ts's own doc comment).
- * Conversation state (brief §25/§37: no persistence yet) lives entirely in
- * this component's state -- refreshing the page starts a clean
- * conversation. The LLM is called exactly once per `send()`, and only
- * because the user submitted a message -- nothing here calls it on mount
- * or on render.
+ * SCOPE V2 (this phase): the whole `/coach` experience -- hero character,
+ * deterministic summary slot (`children`, so `CoachView` stays a plain
+ * Server Component fed by `page.tsx` rather than becoming client code
+ * itself), conversation thread and composer -- as one client island, since
+ * the character's visual state has to react to composer focus/typing and
+ * to the conversation's own pending/turns state, all of which live here.
+ * Still talks to `/api/coach` only (never Supabase, never OpenAI directly,
+ * see route.ts's own doc comment). Conversation state (no persistence yet)
+ * lives entirely in this component's state -- refreshing the page starts a
+ * clean conversation. The LLM is called exactly once per `send()`, and only
+ * because the user submitted a message -- nothing here calls it on mount or
+ * on render; SCOPE's idle/listening motion is pure CSS/composer-focus
+ * state, never a reason by itself to hit the network.
  */
-export function CoachChat() {
+export function CoachChat({ children }: { children?: ReactNode }) {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [input, setInput] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [statusText, setStatusText] = useState(THINKING_STAGES[0].text);
+  const [composerFocused, setComposerFocused] = useState(false);
+  /** The two transient moods only -- "thinking" is derived straight from `pending` below, not stored here, since it needs no timer of its own. */
+  const [momentMood, setMomentMood] = useState<"observe" | "happy" | null>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
+  const settleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (settleTimeoutRef.current) clearTimeout(settleTimeoutRef.current);
+    };
+  }, []);
 
   // Only the LAST turn carrying a Draft is "live" -- an older one that
   // hasn't reached a terminal state yet is superseded, not a second,
@@ -102,6 +124,34 @@ export function CoachChat() {
     };
   }, [pending]);
 
+  /**
+   * SCOPE's mood -- mapped onto the character's own five documented moods
+   * (docs/scope/), not invented UI states. `pending` always wins, so
+   * "thinking" needs no state/effect of its own: it's a pure function of
+   * the same `pending` flag `performTurn` already sets ("looks down
+   * briefly, longer pause, dimmer glow" -- SCOPE reacting to real,
+   * ongoing work, not a spinner standing in for one). "observe"/"happy"
+   * are the one genuinely time-based (transient, settles after a beat)
+   * pair, so that's the only part triggered imperatively -- from
+   * `performTurn` itself, right where the response is classified, not
+   * from a `useEffect` diffing `turns` after the fact. "curious" (a
+   * composer that's focused or has text -- SCOPE's attention turning
+   * toward something new appearing) only applies once nothing more
+   * pressing is already true. There is deliberately no mood for `error`:
+   * the docs are explicit that an emotional state outside the documented
+   * five would be invented, not discovered -- an error stays at `idle`
+   * and is carried entirely by the existing ErrorText/Reintentar UI below.
+   */
+  const activeMood: ScopeMood = pending ? "thinking" : (momentMood ?? "idle");
+  const mood: ScopeMood =
+    activeMood === "idle" && (composerFocused || input.trim().length > 0) ? "curious" : activeMood;
+
+  function settleScope(next: "observe" | "happy") {
+    if (settleTimeoutRef.current) clearTimeout(settleTimeoutRef.current);
+    setMomentMood(next);
+    settleTimeoutRef.current = setTimeout(() => setMomentMood(null), SCOPE_HAPPY_HOLD_MS);
+  }
+
   async function performTurn(message: string, history: { role: "user" | "assistant"; content: string }[]) {
     setError(null);
     setStatusText(THINKING_STAGES[0].text);
@@ -127,6 +177,7 @@ export function CoachChat() {
           actionRejectedReason: data.actionRejectedReason,
         },
       ]);
+      settleScope(data.draft || data.actionDraft ? "happy" : "observe");
     } catch {
       // Never leak a raw error/status code to the user -- the route already
       // returns a clean message on a handled failure; this covers a network
@@ -171,103 +222,124 @@ export function CoachChat() {
   }
 
   return (
-    <div className="flex flex-col gap-6 border-t border-border pt-6">
-      <p className={EYEBROW_CLASSNAME}>Conversar con Scope</p>
-
-      {turns.length === 0 && (
-        <div className="flex flex-col gap-2">
-          {SUGGESTIONS.map((suggestion) => (
-            <button
-              key={suggestion}
-              type="button"
-              onClick={() => send(suggestion)}
-              disabled={pending}
-              className={`flex min-h-11 items-center border border-border px-4 text-left font-sans text-sm font-semibold text-foreground uppercase transition duration-150 hover:border-primary active:scale-[0.98] disabled:opacity-50 ${FOCUS_RING_CLASSNAME} focus-visible:outline-primary`}
-            >
-              {suggestion}
-            </button>
-          ))}
+    <div className="flex flex-col gap-8">
+      {/* SCOPE's own space -- persistent, not just an intro splash: the
+          same character keeps reacting (curious/thinking/observe/happy)
+          once the conversation is underway, not just before it starts. */}
+      <div className="flex flex-col items-center gap-4 text-center">
+        <Scope mood={mood} className="size-26" />
+        <div className="flex flex-col items-center gap-1">
+          <p className={EYEBROW_CLASSNAME}>Scope</p>
+          <p className="font-sans text-2xl leading-none font-black text-foreground uppercase">Tu Coach</p>
         </div>
-      )}
 
-      {turns.length > 0 && (
-        <div aria-live="polite" className="flex flex-col gap-6">
-          {turns.map((turn, index) =>
-            turn.role === "user" ? (
-              <p key={index} className="border-t border-border pt-6 font-sans text-lg font-bold text-foreground first:border-t-0 first:pt-0">
-                {turn.content}
-              </p>
-            ) : (
-              <div key={index} className="flex flex-col gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <p className={EYEBROW_CLASSNAME}>Scope</p>
-                  <p className="whitespace-pre-wrap text-base text-foreground">{turn.content}</p>
+        {turns.length === 0 && (
+          <div className="mt-2 flex w-full flex-col items-center gap-4">
+            <p className="max-w-xs text-base text-muted-foreground">¿Qué quieres mejorar hoy?</p>
+            <div className="flex w-full flex-col gap-2">
+              {SUGGESTIONS.map((suggestion) => (
+                <button
+                  key={suggestion}
+                  type="button"
+                  onClick={() => send(suggestion)}
+                  disabled={pending}
+                  className={`flex min-h-11 items-center justify-center border border-border px-4 text-center font-sans text-sm font-semibold text-foreground uppercase transition duration-150 hover:border-primary active:scale-[0.98] disabled:opacity-50 ${FOCUS_RING_CLASSNAME} focus-visible:outline-primary`}
+                >
+                  {suggestion}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {children}
+
+      <div className="flex flex-col gap-6 border-t border-border pt-6">
+        {turns.length > 0 && (
+          <div aria-live="polite" className="flex flex-col gap-6">
+            {turns.map((turn, index) =>
+              turn.role === "user" ? (
+                <p
+                  key={index}
+                  className="animate-fade-in border-t border-border pt-6 font-sans text-lg font-bold text-foreground first:border-t-0 first:pt-0"
+                >
+                  {turn.content}
+                </p>
+              ) : (
+                <div key={index} className="animate-fade-in flex flex-col gap-4">
+                  <div className="flex flex-col gap-1.5">
+                    <p className={EYEBROW_CLASSNAME}>Scope</p>
+                    <p className="whitespace-pre-wrap text-base text-foreground">{turn.content}</p>
+                  </div>
+                  {turn.draft &&
+                    (index === lastDraftIndex || turn.draftDismissed ? (
+                      <RoutineDraftPreview
+                        draft={turn.draft}
+                        onEditRequested={() => composerRef.current?.focus()}
+                        onSettled={() => markDraftSettled(index)}
+                      />
+                    ) : (
+                      <p className="text-sm text-muted-foreground">Esta propuesta quedó reemplazada por un cambio más reciente.</p>
+                    ))}
+                  {turn.draftRejectedReason && <ErrorText>{turn.draftRejectedReason}</ErrorText>}
+                  {turn.actionDraft &&
+                    (index === lastActionDraftIndex || turn.actionDismissed ? (
+                      <ActionPreview draft={turn.actionDraft} onSettled={() => markActionSettled(index)} />
+                    ) : (
+                      <p className="text-sm text-muted-foreground">Esta propuesta quedó reemplazada por un cambio más reciente.</p>
+                    ))}
+                  {turn.actionRejectedReason && <ErrorText>{turn.actionRejectedReason}</ErrorText>}
                 </div>
-                {turn.draft &&
-                  (index === lastDraftIndex || turn.draftDismissed ? (
-                    <RoutineDraftPreview
-                      draft={turn.draft}
-                      onEditRequested={() => composerRef.current?.focus()}
-                      onSettled={() => markDraftSettled(index)}
-                    />
-                  ) : (
-                    <p className="text-sm text-muted-foreground">Esta propuesta quedó reemplazada por un cambio más reciente.</p>
-                  ))}
-                {turn.draftRejectedReason && <ErrorText>{turn.draftRejectedReason}</ErrorText>}
-                {turn.actionDraft &&
-                  (index === lastActionDraftIndex || turn.actionDismissed ? (
-                    <ActionPreview draft={turn.actionDraft} onSettled={() => markActionSettled(index)} />
-                  ) : (
-                    <p className="text-sm text-muted-foreground">Esta propuesta quedó reemplazada por un cambio más reciente.</p>
-                  ))}
-                {turn.actionRejectedReason && <ErrorText>{turn.actionRejectedReason}</ErrorText>}
-              </div>
-            ),
-          )}
-          {pending && (
-            <p role="status" aria-live="polite" className="border-t border-border pt-6 font-mono text-xs tracking-widest text-muted-foreground uppercase">
-              {statusText}
-            </p>
-          )}
-        </div>
-      )}
+              ),
+            )}
+            {pending && (
+              <p role="status" aria-live="polite" className="border-t border-border pt-6 font-mono text-xs tracking-widest text-muted-foreground uppercase">
+                {statusText}
+              </p>
+            )}
+          </div>
+        )}
 
-      {error && (
-        <div className="flex flex-wrap items-center gap-3">
-          <ErrorText>{error}</ErrorText>
-          <Button type="button" variant="ghost" onClick={retry} className="min-h-11 w-auto border border-border px-4 text-sm">
-            Reintentar
+        {error && (
+          <div className="flex flex-wrap items-center gap-3">
+            <ErrorText>{error}</ErrorText>
+            <Button type="button" variant="ghost" onClick={retry} className="min-h-11 w-auto border border-border px-4 text-sm">
+              Reintentar
+            </Button>
+          </div>
+        )}
+
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            send(input);
+          }}
+          className="flex items-end gap-3"
+        >
+          <div className="flex-1">
+            <label htmlFor="coach-composer" className="sr-only">
+              Habla con Scope
+            </label>
+            <textarea
+              id="coach-composer"
+              ref={composerRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              onFocus={() => setComposerFocused(true)}
+              onBlur={() => setComposerFocused(false)}
+              placeholder="Habla con SCOPE…"
+              rows={1}
+              disabled={pending}
+              className={TEXTAREA_CLASSNAME}
+            />
+          </div>
+          <Button type="submit" disabled={pending || !input.trim()} className="w-auto! shrink-0 px-6 text-base">
+            Enviar
           </Button>
-        </div>
-      )}
-
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          send(input);
-        }}
-        className="flex items-end gap-3"
-      >
-        <div className="flex-1">
-          <label htmlFor="coach-composer" className="sr-only">
-            Escribe a Scope
-          </label>
-          <textarea
-            id="coach-composer"
-            ref={composerRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Escribe a SCOPE…"
-            rows={1}
-            disabled={pending}
-            className={TEXTAREA_CLASSNAME}
-          />
-        </div>
-        <Button type="submit" disabled={pending || !input.trim()} className="w-auto! shrink-0 px-6 text-base">
-          Enviar
-        </Button>
-      </form>
+        </form>
+      </div>
     </div>
   );
 }

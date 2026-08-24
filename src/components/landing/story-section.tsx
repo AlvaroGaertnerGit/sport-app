@@ -1,3 +1,5 @@
+import { ScopeDock } from "@/components/scope/companion";
+import type { ScopeMood } from "@/components/scope/scope.types";
 import { DISPLAY_HEADING_CLASSNAME, EYEBROW_CLASSNAME } from "@/components/ui/typography";
 
 import { LANDING_CONTAINER_CLASSNAME, LANDING_SECTION_CLASSNAME } from "./layout";
@@ -24,6 +26,16 @@ import { ScreenshotBlock } from "./screenshot-block";
  * on brief §22's "screenshot entrando ligeramente desde un lateral." It
  * also carries a gentle scroll-linked Parallax independent of the reveal
  * (brief §24).
+ *
+ * `scopeDock`, when passed, adds a resting spot for Scope (the companion
+ * character, src/components/scope/) at this section -- rendered as a
+ * PLAIN sibling, deliberately outside the screenshot column's own `Reveal`/
+ * `Parallax`. Those two apply their own competing `transform` to whatever
+ * they wrap; CompanionScope only re-measures a dock's position on
+ * `activeDockId` change or window resize, not when a sibling's own
+ * scroll-reveal/parallax transform settles, so nesting the dock inside them
+ * would strand the real Scope at that wrapper's pre-animation offset (see
+ * ScopeDock's own header comment).
  */
 export function StorySection({
   id,
@@ -33,6 +45,7 @@ export function StorySection({
   points,
   screenshot,
   reverse = false,
+  scopeDock,
 }: {
   id?: string;
   eyebrow: string;
@@ -41,6 +54,7 @@ export function StorySection({
   points: readonly string[];
   screenshot: { src: string; alt: string };
   reverse?: boolean;
+  scopeDock?: { id: string; mood: ScopeMood; scale: number };
 }) {
   return (
     <section id={id} className={LANDING_SECTION_CLASSNAME}>
@@ -62,16 +76,29 @@ export function StorySection({
             </ul>
           </Reveal>
 
-          <Reveal
-            delayMs={120}
-            scale
-            fromSide={reverse ? "left" : "right"}
-            className="flex shrink-0 justify-center md:basis-[55%]"
-          >
-            <Parallax speed={0.08}>
-              <ScreenshotBlock src={screenshot.src} alt={screenshot.alt} />
-            </Parallax>
-          </Reveal>
+          <div className="flex shrink-0 flex-col items-center gap-4 md:basis-[55%]">
+            {/* size-40 sm:size-48 on purpose, matching CompanionScope's own
+                hardcoded render size (companion-scope.tsx) exactly, even
+                though this dock's `scale` config shrinks the actual
+                companion visually -- scale is a transform multiplier
+                applied on TOP of that fixed base, it doesn't change how
+                much flow space CompanionScope's position:absolute overlay
+                needs reserved above it. A smaller placeholder box here
+                would under-reserve space and let the real (larger)
+                companion spill into this section's own heading. */}
+            {scopeDock && (
+              <ScopeDock
+                id={scopeDock.id}
+                config={{ mood: scopeDock.mood, scale: scopeDock.scale }}
+                className="size-40 sm:size-48"
+              />
+            )}
+            <Reveal delayMs={120} scale fromSide={reverse ? "left" : "right"} className="flex justify-center">
+              <Parallax speed={0.08}>
+                <ScreenshotBlock src={screenshot.src} alt={screenshot.alt} />
+              </Parallax>
+            </Reveal>
+          </div>
         </div>
       </div>
     </section>

@@ -38,6 +38,24 @@
      once more to #517008 (4.94:1 on --background). */
   --success: #517008;
   --success-foreground: #ffffff;
+
+  /*
+   * SCOPE's own palette (src/components/scope/) -- the reference
+   * implementation's literal, fixed hexes for shell/details/display,
+   * independent of this app's own light/dark tokens (never redesign
+   * Scope's silhouette or materials without an explicit decision). The one
+   * deliberate exception: --scope-warm (eyes/glow/mouth) is tied to Sport
+   * Coach's own --primary red instead of the reference's amber -- the
+   * single "sport" reskin decision for this port, chosen specifically
+   * because it needs no shape change and already flips with --primary's
+   * own light (#c42636) / dark (#ff3045) values below, no separate dark
+   * block needed here.
+   */
+  --scope-shell: #f2f2f0;
+  --scope-details: #dcd8d0;
+  --scope-display: #0b0b0d;
+  --scope-warm: var(--primary);
+  --scope-accent: #a78bfa;
 }
 
 @theme inline {
@@ -56,13 +74,24 @@
   --color-destructive-foreground: var(--destructive-foreground);
   --color-success: var(--success);
   --color-success-foreground: var(--success-foreground);
+  --color-scope-shell: var(--scope-shell);
+  --color-scope-details: var(--scope-details);
+  --color-scope-display: var(--scope-display);
+  --color-scope-warm: var(--scope-warm);
+  --color-scope-accent: var(--scope-accent);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 
   /*
-   * Motion tokens: no framer-motion in this project (deliberate -- see
-   * the `motion` skill's own note that it isn't installed here, and this
-   * app's established no-new-dependency precedent).
+   * Motion tokens: for everything EXCEPT Scope, this app still deliberately
+   * has no animation library -- these plain CSS keyframes remain the answer
+   * for ordinary UI micro-interactions. Scope's own character system
+   * (src/components/scope/) is the one exception: it's a port of a real
+   * framer-motion implementation (springs, cursor-following motion values,
+   * velocity-led gaze), and reproducing that fidelity in CSS/rAF alone
+   * isn't possible -- see that folder's own file headers. Scope owns its
+   * breathing loop directly via a framer `animate` call now, not a CSS
+   * keyframe, so there's no `--animate-scope-*` token here anymore.
    */
   --animate-fade-in: fade-in 200ms ease-out;
   --animate-scale-in: scale-in 200ms ease-out;

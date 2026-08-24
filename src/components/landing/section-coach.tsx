@@ -1,10 +1,10 @@
+import { ScopeDock } from "@/components/scope/companion";
 import { DISPLAY_HEADING_CLASSNAME, EYEBROW_CLASSNAME } from "@/components/ui/typography";
 
 import { LANDING_CONTAINER_CLASSNAME, LANDING_SECTION_CLASSNAME } from "./layout";
 import { Parallax } from "./motion/parallax";
 import { Reveal } from "./motion/reveal";
 import { ScreenshotBlock } from "./screenshot-block";
-import { ScopeMark } from "@/components/ui/scope-mark";
 
 const CAPABILITIES = [
   "Entender tu progreso real, no una sensación.",
@@ -18,20 +18,23 @@ const CAPABILITIES = [
  * One of the most important sections, and the one place the "propone / tú
  * decides / confirmación" architecture has to be stated plainly -- not as
  * an implementation detail, as the actual pitch. SCOPE appears here as the
- * companion doing the proposing, not as decoration. Screenshot-first on
- * desktop (`md:flex-row-reverse`) -- "COACH IA: captura | Texto + SCOPE,"
- * the fourth beat alternating back after Entrena already broke the
- * text-first pattern. DOM order stays text-then-screenshot regardless
- * (same idea as StorySection's own `reverse` prop) -- on mobile that's
- * what keeps this section's fixed stacking ("Título ↓ Texto ↓ Captura,"
- * never screenshot-first, even where a section is screenshot-first on
- * desktop); it's also the more sensible reading order for a screen reader,
- * independent of the visual/desktop-only reordering `md:flex-row-reverse`
- * does.
+ * companion doing the proposing, not as decoration -- this is one of its
+ * "observe" resting docks (leaning in, per the character's own placement
+ * guidance for a section explaining what it does), rendered live rather
+ * than as a static mark. Screenshot-first on desktop (`md:flex-row-reverse`)
+ * -- "COACH IA: captura | Texto + SCOPE," the fourth beat alternating back
+ * after Entrena already broke the text-first pattern. DOM order stays
+ * text-then-screenshot regardless (same idea as StorySection's own
+ * `reverse` prop) -- on mobile that's what keeps this section's fixed
+ * stacking ("Título ↓ Texto ↓ Captura," never screenshot-first, even where
+ * a section is screenshot-first on desktop); it's also the more sensible
+ * reading order for a screen reader, independent of the visual/
+ * desktop-only reordering `md:flex-row-reverse` does.
  *
- * SCOPE gets its own, slightly faster Parallax than the screenshot ("Coach
- * section: pequeño desplazamiento," independent of the screenshot's own
- * movement) -- two separate `Parallax` instances, not one wrapping both.
+ * Scope's own dock slot sits as a plain sibling, deliberately outside the
+ * screenshot's `Reveal`/`Parallax` -- see ScopeDock's own header comment
+ * for why a competing transform on the dock slot would strand the real
+ * companion at its pre-animation offset.
  */
 export function SectionCoach() {
   return (
@@ -64,22 +67,21 @@ export function SectionCoach() {
             </p>
           </Reveal>
 
-          <Reveal
-            delayMs={120}
-            scale
-            fromSide="left"
-            className="flex shrink-0 flex-col items-center gap-6 md:basis-[55%]"
-          >
-            <Parallax speed={0.1} maxOffsetPx={16}>
-              <ScopeMark size={96} className="size-20 sm:size-24" />
-            </Parallax>
-            <Parallax speed={0.08}>
-              <ScreenshotBlock
-                src="/marketing/coach.png"
-                alt="Resumen de progreso y sugerencias de SCOPE en Sport Coach"
-              />
-            </Parallax>
-          </Reveal>
+          <div className="flex shrink-0 flex-col items-center gap-6 md:basis-[55%]">
+            {/* size-40 sm:size-48, matching CompanionScope's own hardcoded
+                render size -- see StorySection's own dock comment for why
+                a smaller placeholder here would under-reserve space and
+                let the real companion spill into the screenshot below it. */}
+            <ScopeDock id="coach" config={{ mood: "observe", scale: 0.85 }} className="size-40 sm:size-48" />
+            <Reveal delayMs={120} scale fromSide="left" className="flex justify-center">
+              <Parallax speed={0.08}>
+                <ScreenshotBlock
+                  src="/marketing/coach.png"
+                  alt="Resumen de progreso y sugerencias de SCOPE en Sport Coach"
+                />
+              </Parallax>
+            </Reveal>
+          </div>
         </div>
       </div>
     </section>
