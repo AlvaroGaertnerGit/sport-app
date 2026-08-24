@@ -26,7 +26,7 @@ vi.mock("@/lib/domain/progress", () => ({
   getProgressSummary: vi.fn(),
 }));
 
-vi.mock("@/lib/domain/plans", () => ({ getActivePlan: vi.fn(), getPlanItems: vi.fn() }));
+vi.mock("@/lib/domain/plans", () => ({ getActivePlan: vi.fn(), getPlanItems: vi.fn(), getUserPlans: vi.fn() }));
 vi.mock("@/lib/domain/routines", () => ({ getRoutineDetail: vi.fn(), getRoutineExerciseNames: vi.fn(), getUserRoutines: vi.fn() }));
 vi.mock("@/lib/domain/history", () => ({ getSessionHistory: vi.fn(), getRecentSessionsForMuscleGroups: vi.fn() }));
 vi.mock("@/lib/domain/today", () => ({ getTodayRecommendation: vi.fn() }));
@@ -35,7 +35,7 @@ vi.mock("@/lib/domain/coach", () => ({ getCoachSummary: vi.fn() }));
 const { executeCoachTool } = await import("../tools");
 const { getActivePlanExerciseProgressions } = await import("@/lib/domain/progression");
 const { getProgressSummary } = await import("@/lib/domain/progress");
-const { getActivePlan, getPlanItems } = await import("@/lib/domain/plans");
+const { getActivePlan, getPlanItems, getUserPlans } = await import("@/lib/domain/plans");
 const { getRoutineDetail, getRoutineExerciseNames, getUserRoutines } = await import("@/lib/domain/routines");
 const { getRecentSessionsForMuscleGroups } = await import("@/lib/domain/history");
 const { getCoachSummary } = await import("@/lib/domain/coach");
@@ -373,6 +373,108 @@ describe("getCurrentPlan tool", () => {
     expect(facts.hasActivePlan).toBe(false);
     expect(getPlanItems).not.toHaveBeenCalled();
     expect(getRoutineExerciseNames).not.toHaveBeenCalled();
+  });
+});
+
+describe("getUserPlans tool", () => {
+  it("passes through every plan's summary verbatim, active and paused alike", async () => {
+    vi.mocked(getUserPlans).mockResolvedValue([
+      { planId: "p1", name: "Fuerza", status: "active", routineCount: 2, routineNames: ["Push", "Pull"], sportName: null },
+      { planId: "p2", name: "Calistenia", status: "paused", routineCount: 1, routineNames: ["Tirón"], sportName: null },
+    ]);
+
+    const result = await executeCoachTool("user-1", "getUserPlans", "{}");
+    const facts = JSON.parse(result.output);
+
+    expect(facts).toHaveLength(2);
+    expect(facts[0]).toEqual({ name: "Fuerza", status: "active", routineCount: 2, routineNames: ["Push", "Pull"], sportName: null });
+    expect(facts[1].status).toBe("paused");
+  });
+});
+
+describe("getPlanDetails tool", () => {
+  it("resolves a named plan (not necessarily active) and reports its routines with exercise names", async () => {
+    vi.mocked(getUserPlans).mockResolvedValue([
+      { planId: "p2", name: "Calistenia", status: "paused", routineCount: 1, routineNames: ["Tirón"], sportName: null },
+    ]);
+    vi.mocked(getPlanItems).mockResolvedValue([{ planItemId: "pi1", routineId: "r-tiron", routineName: "Tirón", order: 1 }]);
+    vi.mocked(getRoutineExerciseNames).mockResolvedValue(new Map([["r-tiron", [{ order: 1, exerciseName: "Pull Up" }]]]));
+
+    const result = await executeCoachTool("user-1", "getPlanDetails", JSON.stringify({ planName: "Calistenia" }));
+    const facts = JSON.parse(result.output);
+
+    expect(facts.found).toBe(true);
+    expect(facts.status).toBe("paused");
+    expect(facts.routines[0].exerciseNames).toEqual(["Pull Up"]);
+  });
+
+  it("reports found:false honestly when no plan matches, never guessing", async () => {
+    vi.mocked(getUserPlans).mockResolvedValue([]);
+
+    const result = await executeCoachTool("user-1", "getPlanDetails", JSON.stringify({ planName: "Inexistente" }));
+    const facts = JSON.parse(result.output);
+
+    expect(facts.found).toBe(false);
+  });
+});
+
+describe("propose_plan_draft tool", () => {
+  it("resolves a plan mixing an existing routine and a brand-new one into a single draft", async () => {
+    vi.mocked(getUserRoutines).mockResolvedValue([{ routineId: "r1", name: "Push", sportName: null, exerciseCount: 3 }]);
+
+    const result = await executeCoachTool(
+      "user-1",
+      "propose_plan_draft",
+      JSON.stringify({
+        name: "Fuerza mixta",
+        activateOnCreate: false,
+        routines: [
+          { isNew: false, existingRoutineName: "Push", newRoutineName: null, newRoutineExercises: [] },
+          {
+            isNew: true,
+            existingRoutineName: null,
+            newRoutineName: "Core",
+            newRoutineExercises: [
+              {
+                exerciseName: "Barbell Bench Press",
+                order: 1,
+                sets: 3,
+                targetType: "reps",
+                targetRepsMin: 6,
+                targetRepsMax: 8,
+                targetDurationSeconds: null,
+                targetWeightKg: null,
+                restSeconds: null,
+              },
+            ],
+          },
+        ],
+      }),
+    );
+
+    expect(result.sideEffect?.type).toBe("plan_draft");
+    const facts = JSON.parse(result.output);
+    expect(facts.accepted).toBe(true);
+    expect(facts.draft.routines).toHaveLength(2);
+    expect(facts.draft.routines[0]).toEqual({ kind: "existing", routineId: "r1", routineName: "Push" });
+  });
+
+  it("rejects with plan_draft_rejected when a referenced existing routine doesn't exist", async () => {
+    vi.mocked(getUserRoutines).mockResolvedValue([]);
+
+    const result = await executeCoachTool(
+      "user-1",
+      "propose_plan_draft",
+      JSON.stringify({
+        name: "Fuerza",
+        activateOnCreate: false,
+        routines: [{ isNew: false, existingRoutineName: "Legs", newRoutineName: null, newRoutineExercises: [] }],
+      }),
+    );
+
+    expect(result.sideEffect?.type).toBe("plan_draft_rejected");
+    const facts = JSON.parse(result.output);
+    expect(facts.accepted).toBe(false);
   });
 });
 

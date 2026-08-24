@@ -1,24 +1,24 @@
 import "server-only";
 
-import { getActivePlan } from "@/lib/domain/plans";
+import { getActivePlan, getPlanItems, getUserPlans } from "@/lib/domain/plans";
 import { getRoutineDetail, getUserRoutines } from "@/lib/domain/routines";
 import { searchExercises } from "@/lib/domain/exercises";
-import type { NewRoutineExerciseTarget, RoutineDetailExercise, RoutineSummary } from "@/lib/domain/types";
+import type { NewRoutineExerciseTarget, PlanItemSummary, PlanSummary, RoutineDetailExercise, RoutineSummary } from "@/lib/domain/types";
 
 /**
  * The write-action counterpart of `RoutineDraft` (routine-draft.ts) --
- * covers the 6 edit-an-existing-routine/plan ops (brief §1/§4).
- * `create_routine` is deliberately NOT one of these: it reuses the
- * already-built `propose_routine_draft`/`RoutineDraftPreview` flow instead
- * (see coach/actions.ts's `confirmCreateRoutineAction`) rather than forcing
- * a second, redundant LLM tool call and a confusing double-preview UI.
+ * covers editing an already-existing routine or plan. `create_routine` and
+ * `create_plan` are deliberately NOT ops here: they reuse the
+ * already-built `propose_routine_draft`/`propose_plan_draft` flows instead
+ * (see coach/actions.ts's `confirmCreateRoutineAction`/
+ * `confirmCreatePlanAction`) rather than forcing a second, redundant LLM
+ * tool call and a confusing double-preview UI.
  *
- * The LLM only ever produces a `RawCoachAction` (names, never IDs --
- * CLAUDE.md §7/brief §5: "el LLM no debe ser quien determine IDs internos
- * arbitrarios"). `resolveAndValidateAction` is the ONLY place a name
- * becomes a real database id, and it's called from both the propose-time
- * tool (tools.ts) and the confirm-time Server Action (coach/actions.ts) --
- * one validation layer, two call sites, per CLAUDE.md §7.
+ * The LLM only ever produces a `RawCoachAction` (names, never IDs).
+ * `resolveAndValidateAction` is the ONLY place a name becomes a real
+ * database id, and it's called from both the propose-time tool (tools.ts)
+ * and the confirm-time Server Action (coach/actions.ts) -- one validation
+ * layer, two call sites.
  */
 
 export type CoachActionOpType =
@@ -27,13 +27,21 @@ export type CoachActionOpType =
   | "remove_exercise"
   | "replace_exercise"
   | "reorder_exercise"
-  | "update_exercise_target";
+  | "update_exercise_target"
+  | "remove_routine_from_plan"
+  | "reorder_plan_item"
+  | "rename_plan"
+  | "activate_plan";
 
 export type RawCoachActionOp = {
   type: CoachActionOpType;
+  /** `add_routine_to_plan`/`remove_routine_from_plan`/`reorder_plan_item`/`rename_plan`/`activate_plan` only. For `add_routine_to_plan`, null means "the user's active plan" -- every other op requires it explicitly. */
+  planName: string | null;
   routineName: string | null;
   exerciseName: string | null;
   newExerciseName: string | null;
+  /** `rename_plan` only -- the plan's new name. */
+  newName: string | null;
   targetType: "reps" | "duration" | null;
   targetSets: number | null;
   targetRepsMin: number | null;
@@ -41,6 +49,7 @@ export type RawCoachActionOp = {
   targetDurationSeconds: number | null;
   targetWeightKg: number | null;
   restSeconds: number | null;
+  /** `reorder_exercise` (within a routine) or `reorder_plan_item` (within a plan) -- 1-based, whichever the op type means. */
   toPosition: number | null;
 };
 
@@ -92,6 +101,35 @@ export type CoachActionOp =
       previousTargetSets: number;
       target: NewRoutineExerciseTarget;
       previousTarget: NewRoutineExerciseTarget;
+    }
+  | {
+      type: "remove_routine_from_plan";
+      planId: string;
+      planName: string;
+      planItemId: string;
+      routineId: string;
+      routineName: string;
+      /** For compensation: re-adding via `addRoutineToPlan` always appends at the end, so undo needs the original position to restore it with `reorderPlanItem`. */
+      snapshot: { order: number };
+    }
+  | {
+      type: "reorder_plan_item";
+      planId: string;
+      planName: string;
+      planItemId: string;
+      routineId: string;
+      routineName: string;
+      toPosition: number;
+      fromPosition: number;
+    }
+  | { type: "rename_plan"; planId: string; previousName: string | null; newName: string }
+  | {
+      type: "activate_plan";
+      planId: string;
+      planName: string;
+      /** Null when there was no active plan to replace -- undo then has nothing to restore. */
+      previousActivePlanId: string | null;
+      previousActivePlanName: string | null;
     };
 
 export type CoachActionDraft = { summary: string; ops: CoachActionOp[]; destructive: boolean };
@@ -125,6 +163,80 @@ function pickByName<T>(
     return { status: "ambiguous", candidates: fuzzy.map(getName) };
   }
   return { status: "not_found" };
+}
+
+/**
+ * Same `pickByName` rule every other resolver in this file uses, targeting
+ * the user's own plans (any status `getUserPlans` returns -- active or
+ * paused, never archived). Exported: also used directly (read-only, no
+ * action involved) by `getPlanDetails` in tools.ts, the same way
+ * `resolveExerciseByName` (routine-draft.ts) is shared by
+ * `getExerciseProgression`.
+ */
+export async function resolveUserPlan(
+  userId: string,
+  name: string,
+): Promise<{ status: "resolved"; plan: PlanSummary } | { status: "ambiguous" | "not_found" | "rejected"; reason: string }> {
+  const plans = await getUserPlans(userId);
+  const picked = pickByName(plans, name, (p) => p.name ?? "");
+
+  if (picked.status === "resolved") {
+    return { status: "resolved", plan: picked.item };
+  }
+  if (picked.status === "ambiguous") {
+    return {
+      status: "ambiguous",
+      reason: `Tienes varios planes parecidos a "${name}": ${picked.candidates.join(", ")}. ¿Cuál quieres decir?`,
+    };
+  }
+  return { status: "not_found", reason: `No encuentro ningún plan llamado "${name}".` };
+}
+
+/**
+ * Finds the one plan_item matching a routine name within an already-known
+ * plan -- shared by `remove_routine_from_plan` and `reorder_plan_item`.
+ * Distinct from `pickByName`'s own ambiguity shape: the same routine can
+ * legitimately appear more than once in one plan (`addRoutineToPlan`'s own
+ * documented behaviour), so more than one match sharing the exact SAME
+ * routine name is a different kind of ambiguity than two DIFFERENT
+ * routines with similar names -- disambiguating "which occurrence" via
+ * chat is inherently confusing, so that case is rejected with a pointer to
+ * the manual editor rather than inventing an ordinal ("the first one")
+ * resolution scheme.
+ */
+function pickPlanItemByRoutineName(
+  items: readonly PlanItemSummary[],
+  routineName: string,
+  planLabel: string,
+): { status: "resolved"; item: PlanItemSummary } | { status: "ambiguous" | "rejected"; reason: string } {
+  const query = routineName.trim().toLowerCase();
+  const exact = items.filter((item) => item.routineName.trim().toLowerCase() === query);
+  const matches =
+    exact.length > 0
+      ? exact
+      : items.filter((item) => {
+          const itemName = item.routineName.trim().toLowerCase();
+          return itemName.includes(query) || query.includes(itemName);
+        });
+
+  if (matches.length === 0) {
+    return { status: "rejected", reason: `"${routineName}" no está en el plan "${planLabel}".` };
+  }
+  if (matches.length === 1) {
+    return { status: "resolved", item: matches[0] };
+  }
+
+  const uniqueNames = new Set(matches.map((item) => item.routineName));
+  if (uniqueNames.size > 1) {
+    return {
+      status: "ambiguous",
+      reason: `En "${planLabel}" hay varias rutinas parecidas a "${routineName}": ${[...uniqueNames].join(", ")}. ¿Cuál quieres decir?`,
+    };
+  }
+  return {
+    status: "rejected",
+    reason: `"${routineName}" aparece varias veces en "${planLabel}". Usa el editor del plan para elegir cuál.`,
+  };
 }
 
 async function resolveRoutineForUser(
@@ -248,17 +360,121 @@ async function resolveOp(
       const routine = await resolveRoutineForUser(userId, op.routineName);
       if (routine.status !== "resolved") return { status: routine.status === "ambiguous" ? "ambiguous" : "rejected", reason: routine.reason };
 
-      const plan = await getActivePlan(userId);
-      if (!plan) return { status: "rejected", reason: "No tienes ningún plan activo ahora mismo." };
+      let targetPlanId: string;
+      let targetPlanName: string;
+      if (op.planName) {
+        const plan = await resolveUserPlan(userId, op.planName);
+        if (plan.status !== "resolved") return { status: plan.status === "ambiguous" ? "ambiguous" : "rejected", reason: plan.reason };
+        targetPlanId = plan.plan.planId;
+        targetPlanName = plan.plan.name ?? "tu plan";
+      } else {
+        const active = await getActivePlan(userId);
+        if (!active) return { status: "rejected", reason: "No tienes ningún plan activo ahora mismo." };
+        targetPlanId = active.id;
+        targetPlanName = active.name ?? "tu plan";
+      }
 
       return {
         status: "resolved",
         op: {
           type: "add_routine_to_plan",
-          planId: plan.id,
-          planName: plan.name ?? "tu plan",
+          planId: targetPlanId,
+          planName: targetPlanName,
           routineId: routine.routine.routineId,
           routineName: routine.routine.name,
+        },
+      };
+    }
+
+    case "remove_routine_from_plan": {
+      if (!op.planName) return { status: "rejected", reason: "Falta el nombre del plan." };
+      if (!op.routineName) return { status: "rejected", reason: "Falta el nombre de la rutina." };
+      const plan = await resolveUserPlan(userId, op.planName);
+      if (plan.status !== "resolved") return { status: plan.status === "ambiguous" ? "ambiguous" : "rejected", reason: plan.reason };
+
+      const items = await getPlanItems(userId, plan.plan.planId);
+      const planLabel = plan.plan.name ?? "tu plan";
+      const picked = pickPlanItemByRoutineName(items, op.routineName, planLabel);
+      if (picked.status !== "resolved") return { status: picked.status === "ambiguous" ? "ambiguous" : "rejected", reason: picked.reason };
+
+      return {
+        status: "resolved",
+        op: {
+          type: "remove_routine_from_plan",
+          planId: plan.plan.planId,
+          planName: planLabel,
+          planItemId: picked.item.planItemId,
+          routineId: picked.item.routineId,
+          routineName: picked.item.routineName,
+          snapshot: { order: picked.item.order },
+        },
+      };
+    }
+
+    case "reorder_plan_item": {
+      if (!op.planName) return { status: "rejected", reason: "Falta el nombre del plan." };
+      if (!op.routineName) return { status: "rejected", reason: "Falta el nombre de la rutina." };
+      if (op.toPosition == null || !Number.isInteger(op.toPosition) || op.toPosition < 1) {
+        return { status: "rejected", reason: "La posición indicada no es válida." };
+      }
+      const plan = await resolveUserPlan(userId, op.planName);
+      if (plan.status !== "resolved") return { status: plan.status === "ambiguous" ? "ambiguous" : "rejected", reason: plan.reason };
+
+      const items = await getPlanItems(userId, plan.plan.planId);
+      const planLabel = plan.plan.name ?? "tu plan";
+      const picked = pickPlanItemByRoutineName(items, op.routineName, planLabel);
+      if (picked.status !== "resolved") return { status: picked.status === "ambiguous" ? "ambiguous" : "rejected", reason: picked.reason };
+
+      if (op.toPosition > items.length) {
+        return { status: "rejected", reason: `El plan "${planLabel}" solo tiene ${items.length} rutinas.` };
+      }
+
+      const sorted = [...items].sort((a, b) => a.order - b.order);
+      const fromPosition = sorted.findIndex((item) => item.planItemId === picked.item.planItemId) + 1;
+
+      return {
+        status: "resolved",
+        op: {
+          type: "reorder_plan_item",
+          planId: plan.plan.planId,
+          planName: planLabel,
+          planItemId: picked.item.planItemId,
+          routineId: picked.item.routineId,
+          routineName: picked.item.routineName,
+          toPosition: op.toPosition,
+          fromPosition,
+        },
+      };
+    }
+
+    case "rename_plan": {
+      if (!op.planName) return { status: "rejected", reason: "Falta el nombre del plan." };
+      if (!op.newName || !op.newName.trim()) return { status: "rejected", reason: "Falta el nuevo nombre del plan." };
+      const plan = await resolveUserPlan(userId, op.planName);
+      if (plan.status !== "resolved") return { status: plan.status === "ambiguous" ? "ambiguous" : "rejected", reason: plan.reason };
+
+      return {
+        status: "resolved",
+        op: { type: "rename_plan", planId: plan.plan.planId, previousName: plan.plan.name, newName: op.newName.trim() },
+      };
+    }
+
+    case "activate_plan": {
+      if (!op.planName) return { status: "rejected", reason: "Falta el nombre del plan." };
+      const plan = await resolveUserPlan(userId, op.planName);
+      if (plan.status !== "resolved") return { status: plan.status === "ambiguous" ? "ambiguous" : "rejected", reason: plan.reason };
+
+      const current = await getActivePlan(userId);
+      const replacesOther = current && current.id !== plan.plan.planId;
+
+      return {
+        status: "resolved",
+        op: {
+          type: "activate_plan",
+          planId: plan.plan.planId,
+          planName: plan.plan.name ?? "tu plan",
+          previousActivePlanId: replacesOther ? current.id : null,
+          previousActivePlanName: replacesOther ? current.name : null,
         },
       };
     }
@@ -477,7 +693,7 @@ export async function resolveAndValidateAction(userId: string, raw: RawCoachActi
     draft: {
       summary: raw.summary,
       ops: resolvedOps,
-      destructive: resolvedOps.some((op) => op.type === "remove_exercise"),
+      destructive: resolvedOps.some((op) => op.type === "remove_exercise" || op.type === "remove_routine_from_plan"),
     },
   };
 }
@@ -496,9 +712,11 @@ export function toRawAction(draft: CoachActionDraft): RawCoachAction {
     ops: draft.ops.map((op): RawCoachActionOp => {
       const base: RawCoachActionOp = {
         type: op.type,
+        planName: null,
         routineName: null,
         exerciseName: null,
         newExerciseName: null,
+        newName: null,
         targetType: null,
         targetSets: null,
         targetRepsMin: null,
@@ -511,7 +729,12 @@ export function toRawAction(draft: CoachActionDraft): RawCoachAction {
 
       switch (op.type) {
         case "add_routine_to_plan":
-          return { ...base, routineName: op.routineName };
+          // Always the resolved plan's real name, never null -- see this
+          // function's own contract comment: re-resolving against the
+          // *current* active plan (rather than the one actually shown in
+          // the preview) would silently swallow drift if the active plan
+          // changed between preview and confirm, defeating `draftsMatch`.
+          return { ...base, planName: op.planName, routineName: op.routineName };
         case "add_exercise":
           return {
             ...base,
@@ -532,6 +755,15 @@ export function toRawAction(draft: CoachActionDraft): RawCoachAction {
           return { ...base, routineName: op.routineName, exerciseName: op.exerciseName, toPosition: op.toPosition };
         case "update_exercise_target":
           return { ...base, routineName: op.routineName, exerciseName: op.exerciseName, targetSets: op.targetSets };
+        case "remove_routine_from_plan":
+          return { ...base, planName: op.planName, routineName: op.routineName };
+        case "reorder_plan_item":
+          return { ...base, planName: op.planName, routineName: op.routineName, toPosition: op.toPosition };
+        case "rename_plan":
+          // Same "always the real current name" reasoning as add_routine_to_plan above.
+          return { ...base, planName: op.previousName, newName: op.newName };
+        case "activate_plan":
+          return { ...base, planName: op.planName };
       }
     }),
   };

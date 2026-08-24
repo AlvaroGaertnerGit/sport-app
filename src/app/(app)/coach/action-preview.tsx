@@ -27,6 +27,16 @@ function describeOp(op: CoachActionOp): string {
       return `Mover ${op.exerciseName} a la posición ${op.toPosition} en ${op.routineName}`;
     case "update_exercise_target":
       return `${op.exerciseName} en ${op.routineName}: ${op.previousTargetSets} series → ${op.targetSets} series`;
+    case "remove_routine_from_plan":
+      return `Quitar "${op.routineName}" de ${op.planName}`;
+    case "reorder_plan_item":
+      return `Mover "${op.routineName}" a la posición ${op.toPosition} en ${op.planName}`;
+    case "rename_plan":
+      return `Renombrar "${op.previousName ?? "tu plan"}" a "${op.newName}"`;
+    case "activate_plan":
+      return op.previousActivePlanName
+        ? `Activar "${op.planName}" — "${op.previousActivePlanName}" dejará de estar activo`
+        : `Activar "${op.planName}"`;
   }
 }
 

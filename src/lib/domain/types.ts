@@ -10,6 +10,25 @@ export type ActivePlan = {
   name: string | null
 }
 
+export type PlanStatus = "active" | "paused" | "archived"
+
+/**
+ * One row in "Mis Planes" -- every plan the user has (active/paused; never
+ * archived, see `getUserPlans`), enough to render a card without a second
+ * round trip per plan. `sportName` is derived, never stored on `plans`
+ * itself (see `getUserPlans`'s own comment) -- non-null only when every
+ * routine in the plan shares the same sport.
+ */
+export type PlanSummary = {
+  planId: string
+  name: string | null
+  status: PlanStatus
+  routineCount: number
+  /** In rotation order -- same order `getPlanItems` would return. */
+  routineNames: string[]
+  sportName: string | null
+}
+
 export type InProgressSession = {
   sessionId: string
   planItemId: string | null

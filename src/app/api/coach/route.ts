@@ -7,6 +7,7 @@ import { checkCoachRateLimit } from "@/lib/ai/rate-limit";
 import { CoachProviderError } from "@/lib/ai/provider";
 import type { RoutineDraft } from "@/lib/ai/routine-draft";
 import type { CoachActionDraft } from "@/lib/ai/action-draft";
+import type { PlanDraft } from "@/lib/ai/plan-draft";
 
 /**
  * The one HTTP boundary between the Coach UI and the AI layer (brief §6,
@@ -70,6 +71,20 @@ function parseCurrentActionDraft(value: unknown): CoachActionDraft | null {
   return null;
 }
 
+function parseCurrentPlanDraft(value: unknown): PlanDraft | null {
+  if (
+    value != null &&
+    typeof value === "object" &&
+    "name" in value &&
+    "routines" in value &&
+    "activateOnCreate" in value &&
+    Array.isArray((value as PlanDraft).routines)
+  ) {
+    return value as PlanDraft;
+  }
+  return null;
+}
+
 export async function POST(request: Request) {
   const user = await getCurrentUser();
   if (!user) {
@@ -106,6 +121,7 @@ export async function POST(request: Request) {
   const history = parseHistory((body as { history?: unknown }).history);
   const currentDraft = parseCurrentDraft((body as { currentDraft?: unknown }).currentDraft);
   const currentActionDraft = parseCurrentActionDraft((body as { currentActionDraft?: unknown }).currentActionDraft);
+  const currentPlanDraft = parseCurrentPlanDraft((body as { currentPlanDraft?: unknown }).currentPlanDraft);
 
   try {
     const result = await runCoachTurn({
@@ -114,6 +130,7 @@ export async function POST(request: Request) {
       history,
       currentDraft,
       currentActionDraft,
+      currentPlanDraft,
     });
 
     // Usage is dev-time cost visibility only (brief §51) -- logged
@@ -128,6 +145,8 @@ export async function POST(request: Request) {
       draftRejectedReason: result.draftRejectedReason,
       actionDraft: result.actionDraft,
       actionRejectedReason: result.actionRejectedReason,
+      planDraft: result.planDraft,
+      planDraftRejectedReason: result.planDraftRejectedReason,
     });
   } catch (err) {
     // Never leak stack traces, provider error details, or the API key.

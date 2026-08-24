@@ -57,7 +57,7 @@ const CATALOG = [
   { exerciseId: "ex-flylow", name: "Cable Fly Low To High", primaryMuscles: ["chest"] },
 ];
 
-vi.mock("@/lib/domain/plans", () => ({ getActivePlan: vi.fn() }));
+vi.mock("@/lib/domain/plans", () => ({ getActivePlan: vi.fn(), getPlanItems: vi.fn(), getUserPlans: vi.fn() }));
 vi.mock("@/lib/domain/routines", () => ({ getRoutineDetail: vi.fn(), getUserRoutines: vi.fn() }));
 vi.mock("@/lib/domain/exercises", () => ({
   searchExercises: vi.fn(async (query: string, excludeIds: string[] = []) => {
@@ -67,17 +67,26 @@ vi.mock("@/lib/domain/exercises", () => ({
 }));
 
 const { resolveAndValidateAction, draftsMatch, toRawAction } = await import("../action-draft");
-const { getActivePlan } = await import("@/lib/domain/plans");
+const { getActivePlan, getPlanItems, getUserPlans } = await import("@/lib/domain/plans");
 const { getRoutineDetail, getUserRoutines } = await import("@/lib/domain/routines");
+
+const PLAN_A = { planId: "p1", name: "Fuerza", status: "active" as const, routineCount: 2, routineNames: ["Push", "Pull"], sportName: null };
+const PLAN_B = { planId: "p2", name: "Calistenia", status: "paused" as const, routineCount: 1, routineNames: ["Tirón"], sportName: null };
+const PLAN_A_ITEMS = [
+  { planItemId: "pi1", routineId: "r1", routineName: "Push", order: 1 },
+  { planItemId: "pi2", routineId: "r2", routineName: "Pull", order: 2 },
+];
 
 type RawCoachActionOp = Parameters<typeof resolveAndValidateAction>[1]["ops"][number];
 
 function rawOp(overrides: Partial<RawCoachActionOp> = {}): RawCoachActionOp {
   return {
     type: "remove_exercise",
+    planName: null,
     routineName: null,
     exerciseName: null,
     newExerciseName: null,
+    newName: null,
     targetType: null,
     targetSets: null,
     targetRepsMin: null,
@@ -347,6 +356,215 @@ describe("toRawAction / draftsMatch (confirm-time staleness re-validation)", () 
       ...PUSH_DETAIL,
       exercises: [{ ...PUSH_DETAIL.exercises[0], targetSets: 5 }, ...PUSH_DETAIL.exercises.slice(1)],
     });
+
+    const raw = toRawAction(first.draft);
+    const second = await resolveAndValidateAction("u1", raw);
+    expect(second.status).toBe("resolved");
+    if (second.status !== "resolved") return;
+
+    expect(draftsMatch(first.draft, second.draft)).toBe(false);
+  });
+});
+
+describe("add_routine_to_plan with an explicit planName", () => {
+  it("targets the named plan instead of the active one", async () => {
+    vi.mocked(getUserRoutines).mockResolvedValue([PUSH]);
+    vi.mocked(getUserPlans).mockResolvedValue([PLAN_A, PLAN_B]);
+
+    const result = await resolveAndValidateAction("u1", {
+      summary: "",
+      ops: [rawOp({ type: "add_routine_to_plan", routineName: "Push", planName: "Calistenia" })],
+    });
+    expect(result.status).toBe("resolved");
+    if (result.status === "resolved") {
+      const op = result.draft.ops[0];
+      expect(op.type).toBe("add_routine_to_plan");
+      if (op.type === "add_routine_to_plan") expect(op.planId).toBe("p2");
+    }
+  });
+
+  it("is ambiguous when the plan name matches more than one real plan", async () => {
+    vi.mocked(getUserRoutines).mockResolvedValue([PUSH]);
+    vi.mocked(getUserPlans).mockResolvedValue([
+      { ...PLAN_A, name: "Fuerza A" },
+      { ...PLAN_B, name: "Fuerza B" },
+    ]);
+
+    const result = await resolveAndValidateAction("u1", {
+      summary: "",
+      ops: [rawOp({ type: "add_routine_to_plan", routineName: "Push", planName: "Fuerza" })],
+    });
+    expect(result.status).toBe("ambiguous");
+  });
+});
+
+describe("remove_routine_from_plan", () => {
+  it("resolves a routine within a named plan", async () => {
+    vi.mocked(getUserPlans).mockResolvedValue([PLAN_A, PLAN_B]);
+    vi.mocked(getPlanItems).mockResolvedValue(PLAN_A_ITEMS);
+
+    const result = await resolveAndValidateAction("u1", {
+      summary: "",
+      ops: [rawOp({ type: "remove_routine_from_plan", planName: "Fuerza", routineName: "Push" })],
+    });
+    expect(result.status).toBe("resolved");
+    if (result.status === "resolved") {
+      const op = result.draft.ops[0];
+      expect(op.type).toBe("remove_routine_from_plan");
+      if (op.type === "remove_routine_from_plan") {
+        expect(op.planItemId).toBe("pi1");
+        expect(op.snapshot.order).toBe(1);
+      }
+      expect(result.draft.destructive).toBe(true);
+    }
+  });
+
+  it("rejects a routine not in the plan", async () => {
+    vi.mocked(getUserPlans).mockResolvedValue([PLAN_A]);
+    vi.mocked(getPlanItems).mockResolvedValue(PLAN_A_ITEMS);
+
+    const result = await resolveAndValidateAction("u1", {
+      summary: "",
+      ops: [rawOp({ type: "remove_routine_from_plan", planName: "Fuerza", routineName: "Legs" })],
+    });
+    expect(result.status).toBe("rejected");
+  });
+
+  it("rejects (not ambiguous) when the same routine appears twice in the plan", async () => {
+    vi.mocked(getUserPlans).mockResolvedValue([PLAN_A]);
+    vi.mocked(getPlanItems).mockResolvedValue([
+      ...PLAN_A_ITEMS,
+      { planItemId: "pi3", routineId: "r1", routineName: "Push", order: 3 },
+    ]);
+
+    const result = await resolveAndValidateAction("u1", {
+      summary: "",
+      ops: [rawOp({ type: "remove_routine_from_plan", planName: "Fuerza", routineName: "Push" })],
+    });
+    // A real duplicate-name ambiguity, deliberately NOT surfaced as
+    // "ambiguous" (which would offer to disambiguate by name) -- the
+    // names are identical, so it's rejected with a pointer to the manual
+    // editor instead.
+    expect(result.status).toBe("rejected");
+  });
+});
+
+describe("reorder_plan_item", () => {
+  it("resolves with the correct from/to position", async () => {
+    vi.mocked(getUserPlans).mockResolvedValue([PLAN_A]);
+    vi.mocked(getPlanItems).mockResolvedValue(PLAN_A_ITEMS);
+
+    const result = await resolveAndValidateAction("u1", {
+      summary: "",
+      ops: [rawOp({ type: "reorder_plan_item", planName: "Fuerza", routineName: "Pull", toPosition: 1 })],
+    });
+    expect(result.status).toBe("resolved");
+    if (result.status === "resolved") {
+      const op = result.draft.ops[0];
+      expect(op.type).toBe("reorder_plan_item");
+      if (op.type === "reorder_plan_item") {
+        expect(op.fromPosition).toBe(2);
+        expect(op.toPosition).toBe(1);
+      }
+    }
+  });
+
+  it("rejects a position beyond the plan's own length", async () => {
+    vi.mocked(getUserPlans).mockResolvedValue([PLAN_A]);
+    vi.mocked(getPlanItems).mockResolvedValue(PLAN_A_ITEMS);
+
+    const result = await resolveAndValidateAction("u1", {
+      summary: "",
+      ops: [rawOp({ type: "reorder_plan_item", planName: "Fuerza", routineName: "Pull", toPosition: 99 })],
+    });
+    expect(result.status).toBe("rejected");
+  });
+});
+
+describe("rename_plan", () => {
+  it("resolves and captures the previous name for compensation", async () => {
+    vi.mocked(getUserPlans).mockResolvedValue([PLAN_A]);
+
+    const result = await resolveAndValidateAction("u1", {
+      summary: "",
+      ops: [rawOp({ type: "rename_plan", planName: "Fuerza", newName: "Fuerza 5 días" })],
+    });
+    expect(result.status).toBe("resolved");
+    if (result.status === "resolved") {
+      const op = result.draft.ops[0];
+      expect(op.type).toBe("rename_plan");
+      if (op.type === "rename_plan") {
+        expect(op.previousName).toBe("Fuerza");
+        expect(op.newName).toBe("Fuerza 5 días");
+      }
+    }
+  });
+
+  it("rejects an empty new name", async () => {
+    vi.mocked(getUserPlans).mockResolvedValue([PLAN_A]);
+
+    const result = await resolveAndValidateAction("u1", {
+      summary: "",
+      ops: [rawOp({ type: "rename_plan", planName: "Fuerza", newName: "  " })],
+    });
+    expect(result.status).toBe("rejected");
+  });
+});
+
+describe("activate_plan", () => {
+  it("captures the currently active plan for compensation when switching", async () => {
+    vi.mocked(getUserPlans).mockResolvedValue([PLAN_A, PLAN_B]);
+    vi.mocked(getActivePlan).mockResolvedValue({ id: "p1", name: "Fuerza" });
+
+    const result = await resolveAndValidateAction("u1", {
+      summary: "",
+      ops: [rawOp({ type: "activate_plan", planName: "Calistenia" })],
+    });
+    expect(result.status).toBe("resolved");
+    if (result.status === "resolved") {
+      const op = result.draft.ops[0];
+      expect(op.type).toBe("activate_plan");
+      if (op.type === "activate_plan") {
+        expect(op.planId).toBe("p2");
+        expect(op.previousActivePlanId).toBe("p1");
+        expect(op.previousActivePlanName).toBe("Fuerza");
+      }
+    }
+  });
+
+  it("captures no previous plan when the target is already active", async () => {
+    vi.mocked(getUserPlans).mockResolvedValue([PLAN_A]);
+    vi.mocked(getActivePlan).mockResolvedValue({ id: "p1", name: "Fuerza" });
+
+    const result = await resolveAndValidateAction("u1", {
+      summary: "",
+      ops: [rawOp({ type: "activate_plan", planName: "Fuerza" })],
+    });
+    expect(result.status).toBe("resolved");
+    if (result.status === "resolved") {
+      const op = result.draft.ops[0];
+      if (op.type === "activate_plan") expect(op.previousActivePlanId).toBeNull();
+    }
+  });
+
+  it("detects drift when a different plan becomes active between propose and confirm", async () => {
+    vi.mocked(getUserPlans).mockResolvedValue([PLAN_A, PLAN_B]);
+    vi.mocked(getActivePlan).mockResolvedValue({ id: "p1", name: "Fuerza" });
+
+    const first = await resolveAndValidateAction("u1", {
+      summary: "",
+      ops: [rawOp({ type: "activate_plan", planName: "Calistenia" })],
+    });
+    expect(first.status).toBe("resolved");
+    if (first.status !== "resolved") return;
+
+    // Someone activated a third plan in the meantime.
+    vi.mocked(getUserPlans).mockResolvedValue([
+      PLAN_A,
+      PLAN_B,
+      { planId: "p3", name: "Movilidad", status: "active" as const, routineCount: 0, routineNames: [], sportName: null },
+    ]);
+    vi.mocked(getActivePlan).mockResolvedValue({ id: "p3", name: "Movilidad" });
 
     const raw = toRawAction(first.draft);
     const second = await resolveAndValidateAction("u1", raw);

@@ -2,7 +2,7 @@ import "server-only";
 
 import { getCoachSummary } from "@/lib/domain/coach";
 import { searchExercises } from "@/lib/domain/exercises";
-import { getActivePlan, getPlanItems } from "@/lib/domain/plans";
+import { getActivePlan, getPlanItems, getUserPlans } from "@/lib/domain/plans";
 import { getProgressSummary } from "@/lib/domain/progress";
 import { getActivePlanExerciseProgressions, getRoutineExerciseProgressions } from "@/lib/domain/progression";
 import { getRoutineDetail, getRoutineExerciseNames } from "@/lib/domain/routines";
@@ -11,10 +11,12 @@ import { getTodayRecommendation } from "@/lib/domain/today";
 import type { ProgressionExerciseInput } from "@/lib/domain/progression";
 
 import { ROUTINE_DRAFT_SCHEMA, resolveExerciseByName, resolveRoutineDraft, validateRoutineDraft } from "./routine-draft";
-import { resolveAndValidateAction } from "./action-draft";
+import { resolveAndValidateAction, resolveUserPlan } from "./action-draft";
+import { PLAN_DRAFT_SCHEMA, resolvePlanDraft, validatePlanDraft } from "./plan-draft";
 import type { CoachToolDefinition } from "./provider";
 import type { RawRoutineDraft, RoutineDraft } from "./routine-draft";
 import type { CoachActionDraft, RawCoachAction } from "./action-draft";
+import type { PlanDraft, RawPlanDraft } from "./plan-draft";
 
 /**
  * Read-only tools plus two structured-output tools with a side effect
@@ -58,7 +60,9 @@ export type CoachToolResult = {
     | { type: "routine_draft"; draft: RoutineDraft }
     | { type: "routine_draft_rejected"; reason: string }
     | { type: "action_draft"; draft: CoachActionDraft }
-    | { type: "action_rejected"; reason: string };
+    | { type: "action_rejected"; reason: string }
+    | { type: "plan_draft"; draft: PlanDraft }
+    | { type: "plan_draft_rejected"; reason: string };
 };
 
 function ok(data: unknown): CoachToolResult {
@@ -154,6 +158,48 @@ async function toolGetCurrentPlan(userId: string): Promise<CoachToolResult> {
     exerciseNames: (exerciseNamesByRoutine.get(item.routineId) ?? []).map((e) => e.exerciseName),
   }));
   return ok({ hasActivePlan: true, planName: plan.name, routines });
+}
+
+/** Every plan the user has (active or paused), for "¿qué planes tengo?"-style questions -- `getCurrentPlan` stays the answer for "the active plan" specifically. */
+async function toolGetUserPlans(userId: string): Promise<CoachToolResult> {
+  const plans = await getUserPlans(userId);
+  return ok(
+    plans.map((plan) => ({
+      name: plan.name,
+      status: plan.status,
+      routineCount: plan.routineCount,
+      routineNames: plan.routineNames,
+      sportName: plan.sportName,
+    })),
+  );
+}
+
+/**
+ * One named plan's own detail (any status, not just active) -- same
+ * batched-no-N+1 shape `getCurrentPlan` already uses, parameterized by a
+ * name-resolved planId instead of implicit-active. Ambiguity/not-found
+ * surface the same way `getExerciseProgression` already does for a name
+ * that doesn't resolve cleanly.
+ */
+async function toolGetPlanDetails(userId: string, args: { planName: string }): Promise<CoachToolResult> {
+  const resolved = await resolveUserPlan(userId, args.planName);
+  if (resolved.status !== "resolved") {
+    return ok({ found: false, reason: resolved.reason });
+  }
+
+  const items = await getPlanItems(userId, resolved.plan.planId);
+  const distinctRoutineIds = [...new Set(items.map((item) => item.routineId))];
+  const exerciseNamesByRoutine = await getRoutineExerciseNames(userId, distinctRoutineIds);
+  return ok({
+    found: true,
+    planName: resolved.plan.name,
+    status: resolved.plan.status,
+    routines: items.map((item) => ({
+      order: item.order,
+      routineName: item.routineName,
+      exerciseNames: (exerciseNamesByRoutine.get(item.routineId) ?? []).map((e) => e.exerciseName),
+    })),
+  });
 }
 
 async function toolGetTodayWorkout(userId: string): Promise<CoachToolResult> {
@@ -295,6 +341,36 @@ async function toolProposeRoutineDraft(userId: string, raw: RawRoutineDraft): Pr
   };
 }
 
+async function toolProposePlanDraft(userId: string, raw: RawPlanDraft): Promise<CoachToolResult> {
+  const { draft, unresolvedRoutineNames, unresolvedExerciseNames } = await resolvePlanDraft(userId, raw);
+  if (!draft) {
+    const reason =
+      unresolvedRoutineNames.length > 0
+        ? `No encuentro estas rutinas: ${unresolvedRoutineNames.join(", ")}.`
+        : unresolvedExerciseNames.length > 0
+          ? `Estos ejercicios no existen en el catálogo: ${unresolvedExerciseNames.join(", ")}.`
+          : "El plan propuesto no tiene rutinas.";
+    return {
+      output: JSON.stringify({ accepted: false, reason }),
+      sideEffect: { type: "plan_draft_rejected", reason },
+    };
+  }
+
+  const validation = validatePlanDraft(draft);
+  if (!validation.valid) {
+    const reason = validation.errors.join(" ");
+    return {
+      output: JSON.stringify({ accepted: false, reason }),
+      sideEffect: { type: "plan_draft_rejected", reason },
+    };
+  }
+
+  return {
+    output: JSON.stringify({ accepted: true, draft }),
+    sideEffect: { type: "plan_draft", draft },
+  };
+}
+
 /**
  * Flat, every field nullable-not-optional -- matches `ROUTINE_DRAFT_SCHEMA`'s
  * existing convention (OpenAI's `strict: true` requires every property
@@ -315,11 +391,28 @@ export const PROPOSE_ACTION_SCHEMA = {
         properties: {
           type: {
             type: "string",
-            enum: ["add_routine_to_plan", "add_exercise", "remove_exercise", "replace_exercise", "reorder_exercise", "update_exercise_target"],
+            enum: [
+              "add_routine_to_plan",
+              "add_exercise",
+              "remove_exercise",
+              "replace_exercise",
+              "reorder_exercise",
+              "update_exercise_target",
+              "remove_routine_from_plan",
+              "reorder_plan_item",
+              "rename_plan",
+              "activate_plan",
+            ],
+          },
+          planName: {
+            type: ["string", "null"],
+            description:
+              "The plan an op targets. For add_routine_to_plan, null means the user's active plan. Required (non-null) for remove_routine_from_plan, reorder_plan_item, rename_plan, and activate_plan.",
           },
           routineName: { type: ["string", "null"] },
           exerciseName: { type: ["string", "null"] },
           newExerciseName: { type: ["string", "null"], description: "replace_exercise's destination exercise only." },
+          newName: { type: ["string", "null"], description: "rename_plan's new plan name only." },
           targetType: { type: ["string", "null"], enum: ["reps", "duration", null] },
           targetSets: { type: ["integer", "null"] },
           targetRepsMin: { type: ["integer", "null"] },
@@ -327,13 +420,18 @@ export const PROPOSE_ACTION_SCHEMA = {
           targetDurationSeconds: { type: ["integer", "null"] },
           targetWeightKg: { type: ["number", "null"] },
           restSeconds: { type: ["integer", "null"] },
-          toPosition: { type: ["integer", "null"], description: "reorder_exercise only, 1-based." },
+          toPosition: {
+            type: ["integer", "null"],
+            description: "1-based. reorder_exercise: position within the routine. reorder_plan_item: position within the plan.",
+          },
         },
         required: [
           "type",
+          "planName",
           "routineName",
           "exerciseName",
           "newExerciseName",
+          "newName",
           "targetType",
           "targetSets",
           "targetRepsMin",
@@ -412,6 +510,27 @@ export const COACH_TOOLS: CoachToolDefinition[] = [
   },
   {
     type: "function",
+    name: "getUserPlans",
+    description:
+      "Todos los planes del usuario (activo y los inactivos/pausados) con su número de rutinas y sus nombres. Usar para '¿qué planes tengo?' o para saber qué planes existen antes de proponer un cambio sobre uno de ellos. Para el plan activo específicamente, getCurrentPlan ya da más detalle (ejercicios de cada rutina).",
+    parameters: { type: "object", properties: {}, required: [], additionalProperties: false },
+    strict: true,
+  },
+  {
+    type: "function",
+    name: "getPlanDetails",
+    description:
+      "El detalle de un plan concreto por nombre (activo o no) -- sus rutinas en orden, con los nombres de sus ejercicios. Usar el nombre tal como lo dice el usuario; el servidor lo resuelve contra sus planes reales y pedirá aclaración si es ambiguo.",
+    parameters: {
+      type: "object",
+      properties: { planName: { type: "string" } },
+      required: ["planName"],
+      additionalProperties: false,
+    },
+    strict: true,
+  },
+  {
+    type: "function",
     name: "getTodayWorkout",
     description:
       "Qué le toca entrenar hoy al usuario según su plan y rotación, con los objetivos recomendados por el Progression Engine. Cada ejercicio incluye progressionStatus ('maintain', 'progress', 'complete' o 'insufficient_data') y progressionReason -- usar ambos para explicar el porqué; recommendedNext puede ser igual al objetivo actual tanto porque el motor recomienda mantenerlo como porque todavía no hay datos suficientes, y esos dos casos no son lo mismo.",
@@ -465,8 +584,16 @@ export const COACH_TOOLS: CoachToolDefinition[] = [
     type: "function",
     name: "propose_action",
     description:
-      "Propone uno o varios cambios sobre una rutina o plan YA EXISTENTES (añadir/quitar/sustituir/reordenar un ejercicio, cambiar sus series, o añadir una rutina al plan activo) para que el usuario los revise y confirme. NO escribe nada en la base de datos -- solo produce una propuesta. NUNCA usar para crear una rutina nueva (usar propose_routine_draft para eso). Usar nombres reales tal como los dice el usuario -- el servidor los resuelve contra los datos reales y pedirá aclaración si hay ambigüedad. update_exercise_target SOLO cambia el número de series (targetSets) -- nunca el peso, las repeticiones ni la duración; no lo uses para esos casos, dile al usuario honestamente que ese cambio no está soportado todavía.",
+      "Propone uno o varios cambios sobre una rutina o plan YA EXISTENTES (añadir/quitar/sustituir/reordenar un ejercicio, cambiar sus series; añadir/quitar/reordenar una rutina en un plan, renombrar un plan, o activar un plan) para que el usuario los revise y confirme. NO escribe nada en la base de datos -- solo produce una propuesta. NUNCA usar para crear una rutina o un plan nuevos (usar propose_routine_draft / propose_plan_draft para eso). Usar nombres reales tal como los dice el usuario -- el servidor los resuelve contra los datos reales y pedirá aclaración si hay ambigüedad. update_exercise_target SOLO cambia el número de series (targetSets) -- nunca el peso, las repeticiones ni la duración; no lo uses para esos casos, dile al usuario honestamente que ese cambio no está soportado todavía.",
     parameters: PROPOSE_ACTION_SCHEMA,
+    strict: true,
+  },
+  {
+    type: "function",
+    name: "propose_plan_draft",
+    description:
+      "Propone un borrador de plan NUEVO (Plan Draft) para que el usuario lo revise. NO crea nada en la base de datos. Cada rutina del plan puede ser una rutina EXISTENTE (usar routineName con un nombre real, verificado contra las rutinas del usuario) o una rutina NUEVA a crear junto con el plan (usar newRoutine con sus ejercicios, verificados con searchExercises igual que en propose_routine_draft). Poner activateOnCreate a true solo si el usuario ha pedido explícitamente que este plan se active al crearlo, o si es evidente por el contexto que quiere empezar a usarlo ya.",
+    parameters: PLAN_DRAFT_SCHEMA,
     strict: true,
   },
 ];
@@ -483,6 +610,10 @@ export async function executeCoachTool(userId: string, name: string, argsJson: s
       return toolGetRecentSessions(userId, args);
     case "getCurrentPlan":
       return toolGetCurrentPlan(userId);
+    case "getUserPlans":
+      return toolGetUserPlans(userId);
+    case "getPlanDetails":
+      return toolGetPlanDetails(userId, args);
     case "getTodayWorkout":
       return toolGetTodayWorkout(userId);
     case "getProgressOverview":
@@ -495,6 +626,8 @@ export async function executeCoachTool(userId: string, name: string, argsJson: s
       return toolProposeRoutineDraft(userId, args as RawRoutineDraft);
     case "propose_action":
       return toolProposeAction(userId, args as RawCoachAction);
+    case "propose_plan_draft":
+      return toolProposePlanDraft(userId, args as RawPlanDraft);
     default:
       return ok({ error: `Unknown tool: ${name}` });
   }

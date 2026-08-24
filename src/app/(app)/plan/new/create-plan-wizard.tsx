@@ -3,7 +3,6 @@
 import { useState } from "react";
 
 import { Button, ButtonArrow, FOCUS_RING_CLASSNAME } from "@/components/ui/button";
-import { ConfirmPanel } from "@/components/ui/confirm-panel";
 import { ErrorText } from "@/components/ui/error-text";
 import { Input } from "@/components/ui/input";
 import { DISPLAY_HEADING_CLASSNAME, EYEBROW_CLASSNAME } from "@/components/ui/typography";
@@ -60,7 +59,8 @@ function NameStep({
       </div>
       {existingActivePlanName && (
         <p className="text-xs text-muted-foreground">
-          Ya tienes un plan activo ({existingActivePlanName}). Podrás decidir si lo archivas al confirmar.
+          Ya tienes un plan activo ({existingActivePlanName}). Este se creará como inactivo, a menos que
+          elijas activarlo en el último paso.
         </p>
       )}
       <Button type="submit" disabled={!trimmed}>
@@ -134,7 +134,7 @@ function OrderStep({
   pending,
   state,
   onCreate,
-  onCancelConflict,
+  hasActivePlan,
 }: {
   planName: string;
   orderedRoutines: RoutineSummary[];
@@ -142,11 +142,11 @@ function OrderStep({
   onBack: () => void;
   pending: boolean;
   state: CreatePlanActionState;
-  onCreate: (replaceActive: boolean) => void;
-  onCancelConflict: () => void;
+  onCreate: (activateOnCreate: boolean) => void;
+  hasActivePlan: boolean;
 }) {
-  const conflict = state && "conflict" in state ? state : null;
-  const error = state && "error" in state ? state.error : null;
+  const [activateOnCreate, setActivateOnCreate] = useState(!hasActivePlan);
+  const error = state?.error ?? null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -192,38 +192,24 @@ function OrderStep({
         ))}
       </div>
 
-      {conflict ? (
-        <ConfirmPanel
-          onCancel={onCancelConflict}
-          message={
-            <>
-              <p className="font-medium">
-                Ya tienes un plan activo{conflict.activePlanName ? `: ${conflict.activePlanName}` : ""}.
-              </p>
-              <p className="mt-1 text-muted-foreground">
-                Crear este plan nuevo archivará el actual. Tu historial y tus rutinas se conservan intactos.
-              </p>
-            </>
-          }
-          cancelButton={
-            <Button type="button" variant="ghost" onClick={onCancelConflict}>
-              Cancelar
-            </Button>
-          }
-          confirmButton={
-            <Button type="button" disabled={pending} onClick={() => onCreate(true)}>
-              {pending ? "Creando…" : "Confirmar"}
-            </Button>
-          }
-        />
-      ) : (
-        <div className="flex flex-col gap-2">
-          <Button type="button" disabled={pending} onClick={() => onCreate(false)}>
-            {pending ? "Creando…" : <>Crear plan <ButtonArrow /></>}
-          </Button>
-          {error && <ErrorText center>{error}</ErrorText>}
-        </div>
+      {hasActivePlan && (
+        <label className="flex min-h-11 items-center gap-3 text-sm text-foreground">
+          <input
+            type="checkbox"
+            checked={activateOnCreate}
+            onChange={(event) => setActivateOnCreate(event.target.checked)}
+            className="size-5 shrink-0 accent-primary"
+          />
+          Activar este plan al crearlo
+        </label>
       )}
+
+      <div className="flex flex-col gap-2">
+        <Button type="button" disabled={pending} onClick={() => onCreate(activateOnCreate)}>
+          {pending ? "Creando…" : <>Crear plan <ButtonArrow /></>}
+        </Button>
+        {error && <ErrorText center>{error}</ErrorText>}
+      </div>
     </div>
   );
 }
@@ -271,15 +257,15 @@ export function CreatePlanWizard({
   }
 
   // Only returns on conflict/error -- createPlanAction redirects on success,
-  // so reaching past the await means it didn't. A plain async function
-  // (not useActionState) because "Cancelar" on a conflict needs to clear
-  // `state` back to undefined without a server round trip.
-  async function handleCreate(replaceActive: boolean) {
+  // so reaching past the await means it failed -- a plain async function
+  // rather than useActionState, matching this wizard's own no-route-change
+  // phase model.
+  async function handleCreate(activateOnCreate: boolean) {
     setPending(true);
     const formData = new FormData();
     formData.set("name", name.trim());
     selectedIds.forEach((id) => formData.append("routineIds", id));
-    formData.set("replaceActive", String(replaceActive));
+    formData.set("activateOnCreate", String(activateOnCreate));
     const result = await createPlanAction(undefined, formData);
     setPending(false);
     setState(result);
@@ -315,7 +301,7 @@ export function CreatePlanWizard({
             pending={pending}
             state={state}
             onCreate={handleCreate}
-            onCancelConflict={() => setState(undefined)}
+            hasActivePlan={existingActivePlanName !== null}
           />
         )}
       </div>

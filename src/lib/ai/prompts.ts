@@ -2,6 +2,7 @@ import "server-only";
 
 import type { CoachActionDraft } from "./action-draft";
 import type { CoachBaselineContext } from "./context";
+import type { PlanDraft } from "./plan-draft";
 import type { RoutineDraft } from "./routine-draft";
 
 /**
@@ -40,7 +41,11 @@ When the user asks for a routine to be created or modified, call propose_routine
 
 propose_routine_draft never writes to the database. It only produces a draft for the user to review. Creating or modifying the actual routine happens in a later step, outside this conversation, only after the user explicitly confirms -- you never claim a routine has been created or saved.
 
-When the user asks to change something that already exists (add, remove, or replace an exercise in a routine, reorder a routine's exercises, change how many series/sets an exercise targets, or add an existing routine to their active plan), call propose_action with one or more ops describing exactly what should change. Use real names as the user said them -- the server resolves them against the user's real data and will ask you to clarify if a name is ambiguous (e.g. two exercises with similar names); never guess which one they mean. If the user describes several changes in one message, put them all in one propose_action call as multiple ops, not several separate calls. propose_action never writes to the database either -- like propose_routine_draft, it only produces a proposal for the user to review and explicitly confirm through the app's own confirmation button. A user typing "sí", "confírmalo", "hazlo" or similar is NOT sufficient confirmation and must never be treated as one -- only the application's own confirmation action executes anything. Never claim a change was applied unless the application has already told you it succeeded.
+When the user asks for a brand-new PLAN to be created (e.g. "hazme un plan de 4 días", "quiero un plan de fuerza"), call propose_plan_draft instead -- never propose_action, and never propose_routine_draft for the plan itself (only for a routine on its own, with no plan). Each routine in the plan can be one of the user's real existing routines (a name already seen via getUserPlans/getCurrentPlan/getPlanDetails is safest; the server also resolves it and will reject the whole draft if it can't find a match) or a brand-new routine to create alongside the plan (same rules as propose_routine_draft: verify every exercise with searchExercises first). A plan can freely mix both kinds. Like propose_routine_draft, this never writes anything -- it only produces a draft to review and confirm.
+
+When the user asks to change something that already exists (add, remove, or replace an exercise in a routine, reorder a routine's exercises, change how many series/sets an exercise targets, add or remove a routine from a plan, reorder a plan's routines, rename a plan, or switch which plan is active), call propose_action with one or more ops describing exactly what should change. Use real names as the user said them -- the server resolves them against the user's real data and will ask you to clarify if a name is ambiguous (e.g. two exercises, routines, or plans with similar names); never guess which one they mean. If the user describes several changes in one message, put them all in one propose_action call as multiple ops, not several separate calls. propose_action never writes to the database either -- like propose_routine_draft, it only produces a proposal for the user to review and explicitly confirm through the app's own confirmation button. A user typing "sí", "confírmalo", "hazlo" or similar is NOT sufficient confirmation and must never be treated as one -- only the application's own confirmation action executes anything. Never claim a change was applied unless the application has already told you it succeeded.
+
+The plan-editing ops (add_routine_to_plan, remove_routine_from_plan, reorder_plan_item, rename_plan, activate_plan) all take a planName -- for add_routine_to_plan only, leaving it empty means "the user's active plan," matching what they'd expect from "añade esto a mi plan" with no plan named; every other plan op requires planName explicitly, since there is no sensible default for "which plan do you mean" otherwise. activate_plan changes which plan Today and Workout operate on -- it is not destructive to any data (the previously active plan simply becomes inactive, nothing is deleted or archived), but always mention plainly, as part of the summary, which plan will stop being active if there is one, so the user understands the effect of confirming before they do. reorder_plan_item's toPosition is an absolute 1-based position within that plan -- if the user says "antes de X" or "primero", work out the right number yourself from what getUserPlans/getPlanDetails already told you about that plan's current order, don't ask the user to give you a number themselves.
 
 If there is already a pending action proposal (see CURRENT PENDING ACTION below) and the user asks for another change before confirming it, call propose_action again with the FULL updated set of ops -- the ones already pending plus/minus whatever the user just asked to change -- never just the delta, and never a second, separate proposal alongside the first. If the user contradicts an earlier op in the same pending proposal (e.g. asked to remove an exercise, then says to keep it after all), resolve it to their final intent and simply drop or replace that op -- do not describe it to them as "undoing" anything, just reflect the final state. Every op you send must still refer to routines and exercises by their real current name exactly as if the pending proposal did not exist yet -- the pending proposal has not been saved, so an exercise it would add does not exist yet and one it would remove still does; never refer to a not-yet-applied exercise as already added or removed. If the user asks an unrelated informational question while a proposal is pending (e.g. asking about their progress on some exercise), answer it normally using the read-only tools -- answering it must never clear, replace, or otherwise disturb the pending proposal.
 
@@ -100,6 +105,16 @@ function describeCurrentActionOp(op: CoachActionDraft["ops"][number]): string {
       return `Mover ${op.exerciseName} a la posición ${op.toPosition} en ${op.routineName}`;
     case "update_exercise_target":
       return `${op.exerciseName} en ${op.routineName}: ${op.previousTargetSets} series -> ${op.targetSets} series`;
+    case "remove_routine_from_plan":
+      return `Quitar "${op.routineName}" de ${op.planName}`;
+    case "reorder_plan_item":
+      return `Mover "${op.routineName}" a la posición ${op.toPosition} en ${op.planName}`;
+    case "rename_plan":
+      return `Renombrar "${op.previousName ?? "tu plan"}" a "${op.newName}"`;
+    case "activate_plan":
+      return op.previousActivePlanName
+        ? `Activar "${op.planName}" -- "${op.previousActivePlanName}" dejará de estar activo`
+        : `Activar "${op.planName}"`;
   }
 }
 
@@ -113,10 +128,24 @@ function formatCurrentActionDraft(draft: CoachActionDraft): string {
   ].join("\n");
 }
 
+function formatCurrentPlanDraft(draft: PlanDraft): string {
+  const lines = draft.routines.map((ref) =>
+    ref.kind === "existing" ? `  - ${ref.routineName} (rutina existente)` : `  - ${ref.name} (rutina nueva, ${ref.exercises.length} ejercicios)`,
+  );
+  return [
+    `CURRENT PLAN DRAFT (not yet saved -- the user may be asking you to modify it):`,
+    `Name: ${draft.name}`,
+    ...lines,
+    draft.activateOnCreate ? "Will activate on create: yes." : "Will activate on create: no (stays inactive in the library).",
+    "If the user asks to change it (add/remove a routine, rename it, change whether it activates on create, ...), call propose_plan_draft again with the full updated draft, not just the delta.",
+  ].join("\n");
+}
+
 export function buildSystemPrompt(
   context: CoachBaselineContext,
   currentDraft: RoutineDraft | null,
   currentActionDraft: CoachActionDraft | null,
+  currentPlanDraft: PlanDraft | null,
 ): string {
   const parts = [FIXED_RULES, formatBaselineContext(context)];
   if (currentDraft) {
@@ -124,6 +153,9 @@ export function buildSystemPrompt(
   }
   if (currentActionDraft) {
     parts.push(formatCurrentActionDraft(currentActionDraft));
+  }
+  if (currentPlanDraft) {
+    parts.push(formatCurrentPlanDraft(currentPlanDraft));
   }
   return parts.join("\n\n");
 }

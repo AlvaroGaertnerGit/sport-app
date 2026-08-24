@@ -3,17 +3,21 @@ export { formatExerciseTarget, isExerciseSetsDone } from "./exercise-progress";
 export { searchExercises } from "./exercises";
 export { getRecentSessionsForMuscleGroups, getSessionHistory } from "./history";
 export {
+  activatePlan,
   addRoutineToPlan,
   archivePlan,
   createPlan,
   getActivePlan,
   getLastCompletedPlanItemOrder,
   getNextPlanItem,
+  getPlan,
   getPlanItems,
+  getUserPlans,
   movePlanItem,
   pickNextPlanItem,
   removePlanItem,
   renamePlan,
+  reorderPlanItem,
   type CreatePlanResult,
   type RemovePlanItemResult,
 } from "./plans";
@@ -71,6 +75,8 @@ export type {
   NextPlanItem,
   PersonalBestStat,
   PlanItemSummary,
+  PlanStatus,
+  PlanSummary,
   ProgressPeriod,
   ProgressSummary,
   RoutineDetail,

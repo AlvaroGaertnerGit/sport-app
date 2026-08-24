@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 
 import { requireUser } from "@/lib/auth/dal";
 import {
+  activatePlan,
   addRoutineToPlan,
   archivePlan,
   createPlan,
@@ -18,10 +19,21 @@ export type PlanActionState = { error?: string } | undefined;
 const GENERIC_ERROR = "No se ha podido guardar. Inténtalo de nuevo.";
 const MAX_PLAN_NAME_LENGTH = 60;
 
-/** Editing the plan can change what Today recommends next -- revalidate both, same as Workout's complete/abandon actions already do. */
-function revalidatePlanScreens() {
+/**
+ * Editing a plan can change what Today recommends next -- revalidate both,
+ * same as Workout's complete/abandon actions already do. `planId`, when
+ * known, also revalidates that plan's own detail/edit routes (now that
+ * "Mis Planes" means more than one plan can be viewed/edited at a time) --
+ * optional because a couple of callers (create) redirect to a fresh page
+ * anyway and don't have a stable existing planId to revalidate.
+ */
+function revalidatePlanScreens(planId?: string) {
   revalidatePath("/plan");
   revalidatePath("/today");
+  if (planId) {
+    revalidatePath(`/plan/${planId}`);
+    revalidatePath(`/plan/${planId}/edit`);
+  }
 }
 
 export async function renamePlanAction(
@@ -43,7 +55,7 @@ export async function renamePlanAction(
     return { error: GENERIC_ERROR };
   }
 
-  revalidatePlanScreens();
+  revalidatePlanScreens(planId);
 }
 
 /**
@@ -71,7 +83,7 @@ export async function movePlanItemAction(formData: FormData): Promise<void> {
     return;
   }
 
-  revalidatePlanScreens();
+  revalidatePlanScreens(planId);
 }
 
 export async function addRoutineToPlanAction(formData: FormData): Promise<void> {
@@ -90,7 +102,7 @@ export async function addRoutineToPlanAction(formData: FormData): Promise<void> 
     return;
   }
 
-  revalidatePlanScreens();
+  revalidatePlanScreens(planId);
 }
 
 export async function removePlanItemAction(
@@ -115,20 +127,16 @@ export async function removePlanItemAction(
     return { error: GENERIC_ERROR };
   }
 
-  revalidatePlanScreens();
+  revalidatePlanScreens(planId);
 }
 
-export type CreatePlanActionState =
-  | { error: string }
-  | { conflict: true; activePlanName: string | null }
-  | undefined;
+export type CreatePlanActionState = PlanActionState;
 
 /**
- * Called directly as a plain async function from the wizard's client
- * component (see `ArchivePlanButton`'s existing pattern), not via
- * `useActionState` -- a conflict needs to be dismissible back to the
- * un-conflicted state by "Cancelar", which a hook-owned state can't do
- * without an extra round trip.
+ * Creating a second (third, ...) plan is no longer a conflict -- see
+ * `createPlan`'s own comment -- so this either succeeds (redirect to the
+ * new plan's own page) or fails with a real error, never a third
+ * "conflict" outcome the wizard has to reconcile.
  */
 export async function createPlanAction(
   _prevState: CreatePlanActionState,
@@ -137,7 +145,7 @@ export async function createPlanAction(
   const user = await requireUser();
   const name = String(formData.get("name") ?? "").trim();
   const routineIds = formData.getAll("routineIds").map(String).filter(Boolean);
-  const replaceActive = formData.get("replaceActive") === "true";
+  const activateOnCreate = formData.get("activateOnCreate") === "true";
 
   if (!name) {
     return { error: "El plan necesita un nombre." };
@@ -151,19 +159,15 @@ export async function createPlanAction(
 
   let result;
   try {
-    result = await createPlan(user.id, { name, routineIds }, { replaceActive });
+    result = await createPlan(user.id, { name, routineIds }, { activateOnCreate });
   } catch (err) {
     console.error("createPlanAction failed:", err);
     return { error: GENERIC_ERROR };
   }
 
-  if (result.status === "conflict") {
-    return { conflict: true, activePlanName: result.activePlanName };
-  }
-
   revalidatePath("/plan");
   revalidatePath("/today");
-  redirect("/plan");
+  redirect(`/plan/${result.planId}`);
 }
 
 export async function archivePlanAction(
@@ -183,6 +187,35 @@ export async function archivePlanAction(
     return { error: GENERIC_ERROR };
   }
 
+  revalidatePath("/plan");
+  revalidatePath("/today");
+  redirect("/plan");
+}
+
+/**
+ * Switches which plan is active. Gated behind its own `ConfirmPanel`
+ * (`ActivatePlanButton`) since it changes what Today/Workout operate on --
+ * the same "important but reversible" treatment `ArchivePlanButton`
+ * already establishes for this exact screen.
+ */
+export async function activatePlanAction(
+  _prevState: PlanActionState,
+  formData: FormData,
+): Promise<PlanActionState> {
+  const user = await requireUser();
+  const planId = String(formData.get("planId") ?? "");
+  if (!planId) {
+    return { error: "Falta el plan." };
+  }
+
+  try {
+    await activatePlan(user.id, planId);
+  } catch (err) {
+    console.error("activatePlanAction failed:", err);
+    return { error: GENERIC_ERROR };
+  }
+
+  revalidatePath("/plan");
   revalidatePath("/today");
   redirect("/plan");
 }

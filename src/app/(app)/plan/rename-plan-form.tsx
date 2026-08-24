@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ErrorText } from "@/components/ui/error-text";
 import { Input } from "@/components/ui/input";
 
-import { renamePlanAction, type PlanActionState } from "../actions";
+import { renamePlanAction, type PlanActionState } from "./actions";
 
 const INITIAL_STATE: PlanActionState = undefined;
 

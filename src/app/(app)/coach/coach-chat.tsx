@@ -10,8 +10,10 @@ import { SCOPE_HAPPY_HOLD_MS } from "@/components/scope/scope-motion";
 import type { ScopeMood } from "@/components/scope/scope.types";
 import type { RoutineDraft } from "@/lib/ai/routine-draft";
 import type { CoachActionDraft } from "@/lib/ai/action-draft";
+import type { PlanDraft } from "@/lib/ai/plan-draft";
 
 import { ActionPreview } from "./action-preview";
+import { PlanDraftPreview } from "./plan-draft-preview";
 import { RoutineDraftPreview } from "./routine-draft-preview";
 
 const SUGGESTIONS = ["¿Cómo estoy progresando?", "¿Qué me toca hoy?", "¿Cómo va mi press banca?"];
@@ -29,6 +31,10 @@ type Turn = {
   actionRejectedReason?: string | null;
   /** Same idea as `draftDismissed`, for `CoachActionDraft` -- set on both confirm-success and Cancelar. */
   actionDismissed?: boolean;
+  planDraft?: PlanDraft | null;
+  planDraftRejectedReason?: string | null;
+  /** Same idea as `draftDismissed`, for `PlanDraft`. */
+  planDraftDismissed?: boolean;
 };
 
 /**
@@ -101,6 +107,13 @@ export function CoachChat({ children }: { children?: ReactNode }) {
     return -1;
   }, [turns]);
 
+  const lastPlanDraftIndex = useMemo(() => {
+    for (let i = turns.length - 1; i >= 0; i--) {
+      if (turns[i].planDraft) return i;
+    }
+    return -1;
+  }, [turns]);
+
   // Round-tripped to the model as its source of truth for "what's pending
   // right now." A settled (confirmed or cancelled) Draft is no longer
   // pending even though its turn still displays a terminal message.
@@ -115,6 +128,12 @@ export function CoachChat({ children }: { children?: ReactNode }) {
     const turn = turns[lastActionDraftIndex];
     return turn.actionDismissed ? null : (turn.actionDraft ?? null);
   }, [turns, lastActionDraftIndex]);
+
+  const currentPlanDraft = useMemo(() => {
+    if (lastPlanDraftIndex === -1) return null;
+    const turn = turns[lastPlanDraftIndex];
+    return turn.planDraftDismissed ? null : (turn.planDraft ?? null);
+  }, [turns, lastPlanDraftIndex]);
 
   useEffect(() => {
     if (!pending) return;
@@ -160,7 +179,7 @@ export function CoachChat({ children }: { children?: ReactNode }) {
       const res = await fetch("/api/coach", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message, history, currentDraft, currentActionDraft }),
+        body: JSON.stringify({ message, history, currentDraft, currentActionDraft, currentPlanDraft }),
       });
       const data = await res.json().catch(() => null);
       if (!res.ok) {
@@ -175,9 +194,11 @@ export function CoachChat({ children }: { children?: ReactNode }) {
           draftRejectedReason: data.draftRejectedReason,
           actionDraft: data.actionDraft,
           actionRejectedReason: data.actionRejectedReason,
+          planDraft: data.planDraft,
+          planDraftRejectedReason: data.planDraftRejectedReason,
         },
       ]);
-      settleScope(data.draft || data.actionDraft ? "happy" : "observe");
+      settleScope(data.draft || data.actionDraft || data.planDraft ? "happy" : "observe");
     } catch {
       // Never leak a raw error/status code to the user -- the route already
       // returns a clean message on a handled failure; this covers a network
@@ -212,6 +233,10 @@ export function CoachChat({ children }: { children?: ReactNode }) {
 
   function markActionSettled(index: number) {
     setTurns((prev) => prev.map((t, i) => (i === index ? { ...t, actionDismissed: true } : t)));
+  }
+
+  function markPlanDraftSettled(index: number) {
+    setTurns((prev) => prev.map((t, i) => (i === index ? { ...t, planDraftDismissed: true } : t)));
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -290,6 +315,17 @@ export function CoachChat({ children }: { children?: ReactNode }) {
                       <p className="text-sm text-muted-foreground">Esta propuesta quedó reemplazada por un cambio más reciente.</p>
                     ))}
                   {turn.actionRejectedReason && <ErrorText>{turn.actionRejectedReason}</ErrorText>}
+                  {turn.planDraft &&
+                    (index === lastPlanDraftIndex || turn.planDraftDismissed ? (
+                      <PlanDraftPreview
+                        draft={turn.planDraft}
+                        onEditRequested={() => composerRef.current?.focus()}
+                        onSettled={() => markPlanDraftSettled(index)}
+                      />
+                    ) : (
+                      <p className="text-sm text-muted-foreground">Esta propuesta quedó reemplazada por un cambio más reciente.</p>
+                    ))}
+                  {turn.planDraftRejectedReason && <ErrorText>{turn.planDraftRejectedReason}</ErrorText>}
                 </div>
               ),
             )}

@@ -10,11 +10,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  */
 
 vi.mock("@/lib/domain", () => ({
+  activatePlan: vi.fn(),
   addRoutineToPlan: vi.fn(),
   addExerciseToRoutine: vi.fn(),
   removeExerciseFromRoutine: vi.fn(),
   removePlanItem: vi.fn(),
+  renamePlan: vi.fn(),
   replaceExerciseInRoutine: vi.fn(),
+  reorderPlanItem: vi.fn(),
   reorderRoutineExercise: vi.fn(),
   restoreRoutineExerciseAt: vi.fn(),
   updateRoutineExerciseTarget: vi.fn(),
@@ -22,11 +25,14 @@ vi.mock("@/lib/domain", () => ({
 
 const { executeCoachActionOps } = await import("../action-execution");
 const {
+  activatePlan,
   addRoutineToPlan,
   addExerciseToRoutine,
   removeExerciseFromRoutine,
   removePlanItem,
+  renamePlan,
   replaceExerciseInRoutine,
+  reorderPlanItem,
   reorderRoutineExercise,
   restoreRoutineExerciseAt,
   updateRoutineExerciseTarget,
@@ -143,5 +149,89 @@ describe("executeCoachActionOps", () => {
 
     expect(result.status).toBe("failed");
     expect(removePlanItem).toHaveBeenCalledWith("u1", "p1", "pi1");
+  });
+
+  it("re-adds a removed plan routine at its original position when a later op fails", async () => {
+    vi.mocked(removePlanItem).mockResolvedValue({ removed: true });
+    vi.mocked(addRoutineToPlan).mockResolvedValue({ planItemId: "pi-new" }); // the compensation re-add
+    vi.mocked(renamePlan).mockRejectedValue(new Error("plan not found"));
+
+    const result = await executeCoachActionOps("u1", [
+      {
+        type: "remove_routine_from_plan",
+        planId: "p1",
+        planName: "Rotación",
+        planItemId: "pi1",
+        routineId: "r1",
+        routineName: "Push",
+        snapshot: { order: 2 },
+      },
+      { type: "rename_plan", planId: "p1", previousName: "Rotación", newName: "Rotación 5 días" },
+    ]);
+
+    expect(result.status).toBe("failed");
+    expect(addRoutineToPlan).toHaveBeenCalledWith("u1", "p1", "r1");
+    expect(reorderPlanItem).toHaveBeenCalledWith("u1", "p1", "pi-new", 2);
+  });
+
+  it("moves a reordered plan item back to its original position when a later op fails", async () => {
+    vi.mocked(reorderPlanItem).mockResolvedValueOnce(undefined); // the op itself
+    vi.mocked(renamePlan).mockRejectedValue(new Error("plan not found"));
+    vi.mocked(reorderPlanItem).mockResolvedValueOnce(undefined); // the compensation call
+
+    const result = await executeCoachActionOps("u1", [
+      { type: "reorder_plan_item", planId: "p1", planName: "Rotación", planItemId: "pi1", routineId: "r1", routineName: "Push", toPosition: 1, fromPosition: 3 },
+      { type: "rename_plan", planId: "p1", previousName: "Rotación", newName: "Rotación 5 días" },
+    ]);
+
+    expect(result.status).toBe("failed");
+    expect(reorderPlanItem).toHaveBeenNthCalledWith(2, "u1", "p1", "pi1", 3);
+  });
+
+  it("restores a plan's previous name when a later op fails", async () => {
+    vi.mocked(renamePlan).mockResolvedValueOnce(undefined); // the op itself
+    vi.mocked(activatePlan).mockRejectedValue(new Error("plan not found"));
+    vi.mocked(renamePlan).mockResolvedValueOnce(undefined); // the compensation call
+
+    const result = await executeCoachActionOps("u1", [
+      { type: "rename_plan", planId: "p1", previousName: "Rotación", newName: "Rotación 5 días" },
+      { type: "activate_plan", planId: "p1", planName: "Rotación 5 días", previousActivePlanId: "p2", previousActivePlanName: "Calistenia" },
+    ]);
+
+    expect(result.status).toBe("failed");
+    expect(renamePlan).toHaveBeenNthCalledWith(2, "u1", "p1", "Rotación");
+  });
+
+  it("re-activates the previously active plan when a later op fails", async () => {
+    vi.mocked(activatePlan).mockResolvedValueOnce(undefined); // the op itself
+    vi.mocked(renamePlan).mockRejectedValue(new Error("plan not found"));
+    vi.mocked(activatePlan).mockResolvedValueOnce(undefined); // the compensation call
+
+    const result = await executeCoachActionOps("u1", [
+      { type: "activate_plan", planId: "p1", planName: "Rotación", previousActivePlanId: "p2", previousActivePlanName: "Calistenia" },
+      { type: "rename_plan", planId: "p3", previousName: "Otro", newName: "Otro 2" },
+    ]);
+
+    expect(result.status).toBe("failed");
+    expect(activatePlan).toHaveBeenNthCalledWith(2, "u1", "p2");
+  });
+
+  it("fails the whole batch when removing a plan routine that has session history", async () => {
+    vi.mocked(removePlanItem).mockResolvedValue({ removed: false, reason: "has_history" });
+
+    const result = await executeCoachActionOps("u1", [
+      {
+        type: "remove_routine_from_plan",
+        planId: "p1",
+        planName: "Rotación",
+        planItemId: "pi1",
+        routineId: "r1",
+        routineName: "Push",
+        snapshot: { order: 1 },
+      },
+    ]);
+
+    expect(result.status).toBe("failed");
+    expect(addRoutineToPlan).not.toHaveBeenCalled(); // nothing to compensate -- the op itself never succeeded
   });
 });

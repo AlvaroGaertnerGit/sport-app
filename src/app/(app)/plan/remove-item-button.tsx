@@ -5,7 +5,7 @@ import { useActionState } from "react";
 import { FOCUS_RING_CLASSNAME } from "@/components/ui/button";
 import { ErrorText } from "@/components/ui/error-text";
 
-import { removePlanItemAction, type PlanActionState } from "../actions";
+import { removePlanItemAction, type PlanActionState } from "./actions";
 
 const INITIAL_STATE: PlanActionState = undefined;
 

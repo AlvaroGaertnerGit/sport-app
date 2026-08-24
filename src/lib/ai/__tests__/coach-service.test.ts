@@ -39,7 +39,7 @@ describe("runCoachTurn", () => {
   it("returns the model's reply directly when no tool call is made", async () => {
     const provider = new MockCoachProvider([{ output: [{ type: "message", text: "Has entrenado 6 veces." }], usage: null }]);
 
-    const result = await runCoachTurn({ userId: "u1", message: "¿Cómo estoy progresando?", history: [], currentDraft: null, currentActionDraft: null, provider });
+    const result = await runCoachTurn({ userId: "u1", message: "¿Cómo estoy progresando?", history: [], currentDraft: null, currentActionDraft: null, currentPlanDraft: null, provider });
 
     expect(result.reply).toBe("Has entrenado 6 veces.");
     expect(result.draft).toBeNull();
@@ -53,7 +53,7 @@ describe("runCoachTurn", () => {
       { output: [{ type: "message", text: "Has entrenado 6 veces en 30 días." }], usage: null },
     ]);
 
-    const result = await runCoachTurn({ userId: "u1", message: "¿Cómo estoy progresando?", history: [], currentDraft: null, currentActionDraft: null, provider });
+    const result = await runCoachTurn({ userId: "u1", message: "¿Cómo estoy progresando?", history: [], currentDraft: null, currentActionDraft: null, currentPlanDraft: null, provider });
 
     expect(executeCoachTool).toHaveBeenCalledWith("u1", "getTrainingSummary", "{}");
     expect(result.reply).toBe("Has entrenado 6 veces en 30 días.");
@@ -71,7 +71,7 @@ describe("runCoachTurn", () => {
       { output: [{ type: "message", text: "Te propongo esta rutina." }], usage: null },
     ]);
 
-    const result = await runCoachTurn({ userId: "u1", message: "Créame una rutina de pecho", history: [], currentDraft: null, currentActionDraft: null, provider });
+    const result = await runCoachTurn({ userId: "u1", message: "Créame una rutina de pecho", history: [], currentDraft: null, currentActionDraft: null, currentPlanDraft: null, provider });
 
     expect(result.draft).toEqual(draft);
     expect(result.draftRejectedReason).toBeNull();
@@ -94,6 +94,7 @@ describe("runCoachTurn", () => {
       history: [],
       currentDraft: null,
       currentActionDraft: null,
+      currentPlanDraft: null,
       provider,
     });
 
@@ -113,7 +114,7 @@ describe("runCoachTurn", () => {
       { output: [{ type: "message", text: "Te propongo este cambio." }], usage: null },
     ]);
 
-    const result = await runCoachTurn({ userId: "u1", message: "Quita los fondos de Push", history: [], currentDraft: null, currentActionDraft: null, provider });
+    const result = await runCoachTurn({ userId: "u1", message: "Quita los fondos de Push", history: [], currentDraft: null, currentActionDraft: null, currentPlanDraft: null, provider });
 
     expect(result.actionDraft).toEqual(draft);
     expect(result.actionRejectedReason).toBeNull();
@@ -122,7 +123,7 @@ describe("runCoachTurn", () => {
   it("never populates an action draft when no tool was called", async () => {
     const provider = new MockCoachProvider([{ output: [{ type: "message", text: "Claro, dime qué quieres cambiar." }], usage: null }]);
 
-    const result = await runCoachTurn({ userId: "u1", message: "Hola", history: [], currentDraft: null, currentActionDraft: null, provider });
+    const result = await runCoachTurn({ userId: "u1", message: "Hola", history: [], currentDraft: null, currentActionDraft: null, currentPlanDraft: null, provider });
 
     expect(result.actionDraft).toBeNull();
     expect(result.actionRejectedReason).toBeNull();
@@ -136,7 +137,7 @@ describe("runCoachTurn", () => {
     };
     const provider = new RecordingProvider([{ output: [{ type: "message", text: "De acuerdo." }], usage: null }]);
 
-    await runCoachTurn({ userId: "u1", message: "y también sube el peso", history: [], currentDraft: null, currentActionDraft: pending, provider });
+    await runCoachTurn({ userId: "u1", message: "y también sube el peso", history: [], currentDraft: null, currentActionDraft: pending, currentPlanDraft: null, provider });
 
     expect(provider.calls).toHaveLength(1);
     expect(provider.calls[0].instructions).toContain("CURRENT PENDING ACTION");

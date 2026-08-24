@@ -1,11 +1,14 @@
 import "server-only";
 
 import {
+  activatePlan,
   addRoutineToPlan,
   addExerciseToRoutine,
   removeExerciseFromRoutine,
   removePlanItem,
+  renamePlan,
   replaceExerciseInRoutine,
+  reorderPlanItem,
   reorderRoutineExercise,
   restoreRoutineExerciseAt,
   updateRoutineExerciseTarget,
@@ -63,6 +66,37 @@ async function undoOp(userId: string, completed: CompletedOp): Promise<void> {
     case "update_exercise_target":
       await updateRoutineExerciseTarget(userId, op.routineId, op.exerciseId, op.previousTarget);
       return;
+    case "remove_routine_from_plan": {
+      // Re-adding always appends at the end -- reorderPlanItem restores the
+      // original position captured in the op's own snapshot.
+      const restored = await addRoutineToPlan(userId, op.planId, op.routineId);
+      await reorderPlanItem(userId, op.planId, restored.planItemId, op.snapshot.order);
+      return;
+    }
+    case "reorder_plan_item":
+      await reorderPlanItem(userId, op.planId, op.planItemId, op.fromPosition);
+      return;
+    case "rename_plan":
+      if (op.previousName == null) {
+        // The column is nullable in principle, but every plan created
+        // through this app's own flows always has a real name -- this is
+        // defensive, not an expected path.
+        console.error("[coach-action] cannot compensate rename_plan -- no previous name recorded", { userId, op });
+        return;
+      }
+      await renamePlan(userId, op.planId, op.previousName);
+      return;
+    case "activate_plan":
+      if (op.previousActivePlanId) {
+        await activatePlan(userId, op.previousActivePlanId);
+      } else {
+        // Nothing was active before -- the newly-activated plan staying
+        // active is still a valid single-active-plan state, just not a
+        // perfect rollback (there's no domain operation for "deactivate
+        // with nothing to replace it").
+        console.error("[coach-action] cannot fully compensate activate_plan -- no previous active plan to restore", { userId, op });
+      }
+      return;
   }
 }
 
@@ -86,6 +120,27 @@ async function applyOp(userId: string, op: CoachActionOp): Promise<{ planItemId?
       return {};
     case "update_exercise_target":
       await updateRoutineExerciseTarget(userId, op.routineId, op.exerciseId, op.target);
+      return {};
+    case "remove_routine_from_plan": {
+      const result = await removePlanItem(userId, op.planId, op.planItemId);
+      if (!result.removed) {
+        // Same "has session history, protected by ON DELETE RESTRICT"
+        // outcome the manual editor's RemoveItemButton reports specifically
+        // -- here it just becomes a generic op failure (see this file's own
+        // header comment on compensation), same treatment every other op's
+        // domain-level rejection already gets.
+        throw new Error("remove_routine_from_plan: plan item has session history");
+      }
+      return {};
+    }
+    case "reorder_plan_item":
+      await reorderPlanItem(userId, op.planId, op.planItemId, op.toPosition);
+      return {};
+    case "rename_plan":
+      await renamePlan(userId, op.planId, op.newName);
+      return {};
+    case "activate_plan":
+      await activatePlan(userId, op.planId);
       return {};
   }
 }

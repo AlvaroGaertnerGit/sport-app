@@ -7,6 +7,7 @@ import { OpenAIProvider, type CoachInputItem, type CoachProvider } from "./provi
 import { COACH_TOOLS, executeCoachTool } from "./tools";
 import type { RoutineDraft } from "./routine-draft";
 import type { CoachActionDraft } from "./action-draft";
+import type { PlanDraft } from "./plan-draft";
 
 /**
  * Ties context + tools + provider together into one conversational turn
@@ -24,6 +25,8 @@ export type CoachTurnResult = {
   draftRejectedReason: string | null;
   actionDraft: CoachActionDraft | null;
   actionRejectedReason: string | null;
+  planDraft: PlanDraft | null;
+  planDraftRejectedReason: string | null;
   usage: { inputTokens: number; outputTokens: number; totalTokens: number } | null;
 };
 
@@ -36,13 +39,14 @@ export async function runCoachTurn(params: {
   history: readonly CoachMessage[];
   currentDraft: RoutineDraft | null;
   currentActionDraft: CoachActionDraft | null;
+  currentPlanDraft: PlanDraft | null;
   provider?: CoachProvider;
 }): Promise<CoachTurnResult> {
   const provider = params.provider ?? new OpenAIProvider();
   const model = getCoachModel();
 
   const context = await buildCoachBaselineContext(params.userId);
-  const instructions = buildSystemPrompt(context, params.currentDraft, params.currentActionDraft);
+  const instructions = buildSystemPrompt(context, params.currentDraft, params.currentActionDraft, params.currentPlanDraft);
 
   const input: CoachInputItem[] = [
     ...params.history.map((m) => ({ role: m.role, content: m.content }) as const),
@@ -53,6 +57,8 @@ export async function runCoachTurn(params: {
   let draftRejectedReason: string | null = null;
   let actionDraft: CoachActionDraft | null = null;
   let actionRejectedReason: string | null = null;
+  let planDraft: PlanDraft | null = null;
+  let planDraftRejectedReason: string | null = null;
   let totalUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
   let sawUsage = false;
 
@@ -80,6 +86,8 @@ export async function runCoachTurn(params: {
         draftRejectedReason,
         actionDraft,
         actionRejectedReason,
+        planDraft,
+        planDraftRejectedReason,
         usage: sawUsage ? totalUsage : null,
       };
     }
@@ -99,6 +107,11 @@ export async function runCoachTurn(params: {
         actionRejectedReason = null;
       } else if (toolResult.sideEffect?.type === "action_rejected") {
         actionRejectedReason = toolResult.sideEffect.reason;
+      } else if (toolResult.sideEffect?.type === "plan_draft") {
+        planDraft = toolResult.sideEffect.draft;
+        planDraftRejectedReason = null;
+      } else if (toolResult.sideEffect?.type === "plan_draft_rejected") {
+        planDraftRejectedReason = toolResult.sideEffect.reason;
       }
     }
   }
@@ -109,6 +122,8 @@ export async function runCoachTurn(params: {
     actionDraft,
     actionRejectedReason,
     draftRejectedReason,
+    planDraft,
+    planDraftRejectedReason,
     usage: sawUsage ? totalUsage : null,
   };
 }
