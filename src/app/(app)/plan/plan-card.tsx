@@ -47,7 +47,7 @@ export function PlanCard({ plan, currentActivePlanName }: { plan: PlanSummary; c
         <p className="text-sm text-muted-foreground">Sin rutinas todavía.</p>
       )}
 
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Link
           href={`/plan/${plan.planId}/edit`}
           className={`inline-flex min-h-11 items-center px-2 font-mono text-xs tracking-wide text-muted-foreground uppercase transition-colors duration-150 hover:text-foreground ${FOCUS_RING_CLASSNAME} focus-visible:outline-primary`}

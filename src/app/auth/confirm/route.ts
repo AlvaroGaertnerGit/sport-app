@@ -2,6 +2,7 @@ import { type EmailOtpType } from "@supabase/supabase-js";
 import { type NextRequest, NextResponse } from "next/server";
 
 import { safeRedirectTargetFromUrl } from "@/lib/auth/safe-redirect";
+import { LEGAL_VERSION } from "@/lib/legal/version";
 import { createClient } from "@/lib/supabase/server";
 
 /**
@@ -34,9 +35,24 @@ export async function GET(request: NextRequest) {
 
   if (tokenHash && type) {
     const supabase = await createClient();
-    const { error } = await supabase.auth.verifyOtp({ type, token_hash: tokenHash });
+    const { data, error } = await supabase.auth.verifyOtp({ type, token_hash: tokenHash });
 
     if (!error) {
+      // type === "email" is specifically the signup-confirmation link (see
+      // docs/email-templates/confirm-signup.html) -- the register form
+      // already required accepting Terms/Privacy before calling signUp(),
+      // but when email confirmation is on, that user had no session yet at
+      // that point (see signUpAction's own comment), so this is the first
+      // moment `consent_log`'s RLS (insert own row only) can actually
+      // succeed for them.
+      if (type === "email" && data.user) {
+        const { error: consentError } = await supabase
+          .from("consent_log")
+          .insert({ user_id: data.user.id, consent_type: "terms_and_privacy", version: LEGAL_VERSION });
+        if (consentError) {
+          console.error("[auth] failed to record terms/privacy consent:", consentError.message);
+        }
+      }
       return NextResponse.redirect(new URL(next, request.url));
     }
   }

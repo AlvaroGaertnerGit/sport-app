@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useActionState } from "react";
 
-import { Button, ButtonArrow, TEXT_LINK_CLASSNAME } from "@/components/ui/button";
+import { Button, ButtonArrow, FOCUS_RING_CLASSNAME, TEXT_LINK_CLASSNAME } from "@/components/ui/button";
 import { ErrorText } from "@/components/ui/error-text";
 import { Input } from "@/components/ui/input";
 import { signUpAction, type AuthFormState } from "@/lib/auth/actions";
@@ -47,6 +47,36 @@ export function RegisterForm() {
           aria-describedby={hasError ? ERROR_ID : undefined}
         />
       </div>
+
+      {/* Separate, unticked-by-default consent (RGPD/LSSI: never bundled
+          with account creation itself, never pre-checked) -- min-h-11 on
+          the label so the whole row is a >=44px touch target, not just the
+          16px checkbox square. */}
+      <label
+        htmlFor="terms"
+        className="flex min-h-11 cursor-pointer items-start gap-3 text-sm text-muted-foreground"
+      >
+        <input
+          id="terms"
+          name="terms"
+          type="checkbox"
+          required
+          aria-invalid={hasError}
+          aria-describedby={hasError ? ERROR_ID : undefined}
+          className={`mt-0.5 size-5 shrink-0 border-2 border-border bg-transparent accent-primary ${FOCUS_RING_CLASSNAME} focus-visible:outline-primary`}
+        />
+        <span>
+          He leído y acepto los{" "}
+          <Link href="/legal/terminos" target="_blank" className={TEXT_LINK_CLASSNAME}>
+            Términos y condiciones
+          </Link>{" "}
+          y la{" "}
+          <Link href="/legal/privacidad" target="_blank" className={TEXT_LINK_CLASSNAME}>
+            Política de privacidad
+          </Link>
+          .
+        </span>
+      </label>
 
       {state?.error && <ErrorText id={ERROR_ID}>{state.error}</ErrorText>}
       {state?.message && (

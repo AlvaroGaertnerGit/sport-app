@@ -255,7 +255,7 @@ export function CoachChat({ children }: { children?: ReactNode }) {
         <Scope mood={mood} className="size-26" />
         <div className="flex flex-col items-center gap-1">
           <p className={EYEBROW_CLASSNAME}>Scope</p>
-          <p className="font-sans text-2xl leading-none font-black text-foreground uppercase">Tu Coach</p>
+          <p className="font-sans text-2xl leading-none font-black text-foreground uppercase">Coach IA</p>
         </div>
 
         {turns.length === 0 && (

@@ -34,7 +34,7 @@ export default async function CoachPage() {
             <Scope mood="idle" className="size-11 shrink-0" />
             <div className="flex flex-col">
               <p className={EYEBROW_CLASSNAME}>Scope</p>
-              <p className="font-sans text-lg leading-none font-bold text-foreground uppercase">Tu Coach</p>
+              <p className="font-sans text-lg leading-none font-bold text-foreground uppercase">Coach IA</p>
             </div>
           </div>
           <ProfileLink />

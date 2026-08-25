@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 
 import { safeRedirectTarget } from "@/lib/auth/safe-redirect";
+import { LEGAL_VERSION } from "@/lib/legal/version";
 import { SITE_URL } from "@/lib/site-url";
 import { createClient } from "@/lib/supabase/server";
 
@@ -61,9 +62,13 @@ export async function signUpAction(
 ): Promise<AuthFormState> {
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
+  const termsAccepted = formData.get("terms") === "on";
 
   if (!email || !password) {
     return { error: "Email y contraseña son obligatorios." };
+  }
+  if (!termsAccepted) {
+    return { error: "Debes aceptar los Términos y condiciones y la Política de privacidad para crear una cuenta." };
   }
 
   const supabase = await createClient();
@@ -95,7 +100,18 @@ export async function signUpAction(
 
     if (data.session) {
       // Email confirmation is disabled for this project (or already
-      // satisfied) -- signUp() signed the user in immediately.
+      // satisfied) -- signUp() signed the user in immediately, so this same
+      // (now-authenticated) client can record consent right away. When
+      // confirmation IS required, data.session is null here and this client
+      // is still anonymous -- consent is recorded instead in
+      // src/app/auth/confirm/route.ts, the first moment that user's session
+      // actually exists.
+      const { error: consentError } = await supabase
+        .from("consent_log")
+        .insert({ user_id: data.user!.id, consent_type: "terms_and_privacy", version: LEGAL_VERSION });
+      if (consentError) {
+        console.error("[auth] failed to record terms/privacy consent:", consentError.message);
+      }
       redirect("/today");
     }
 

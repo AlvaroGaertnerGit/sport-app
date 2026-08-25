@@ -98,7 +98,7 @@ export function ActionPreview({ draft, onSettled }: { draft: CoachActionDraft; o
           <form action={confirmAction}>
             <input type="hidden" name="actionDraftJson" value={JSON.stringify(draft)} />
             <Button type="submit" variant={draft.destructive ? "destructive-ghost" : "primary"} disabled={pending}>
-              {pending ? "Aplicando…" : draft.destructive ? "Eliminar ejercicio" : "Confirmar"}
+              {pending ? "Aplicando…" : draft.destructive ? "Eliminar" : "Confirmar"}
             </Button>
           </form>
         }

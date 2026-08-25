@@ -24,41 +24,66 @@ import type { TodayRecommendation } from "./types";
  * into `{ type: "error" }` — getActivePlan/getInProgressSession/
  * getNextPlanItem throw on real infra failures rather than returning null,
  * so a Supabase error is never silently reinterpreted as "no_plan".
+ *
+ * One bounded retry (2 attempts total, fixed 400ms gap) wraps the whole
+ * read chain: a real auth/permission failure never reaches this function in
+ * the first place (`requireUser()` has already redirected before Today
+ * calls this), so in practice everything this can catch is infra-shaped —
+ * a transient Supabase/network blip, not a logical error — which is exactly
+ * the "occasionally, on open, the plan fails to load" report this retry was
+ * added for (see docs' investigation notes). NOT a polling loop and NOT
+ * unbounded: exactly one retry, then the real `{ type: "error" }` if the
+ * second attempt also fails, so a genuine outage still surfaces as an error
+ * rather than hanging.
  */
-export async function getTodayRecommendation(userId: string): Promise<TodayRecommendation> {
-  try {
-    const inProgress = await getInProgressSession(userId);
-    if (inProgress) {
-      return {
-        type: "in_progress",
-        sessionId: inProgress.sessionId,
-        planItemId: inProgress.planItemId,
-        routineId: inProgress.routineId,
-        routineName: inProgress.routineName,
-      };
-    }
+const RETRY_ATTEMPTS = 2;
+const RETRY_DELAY_MS = 400;
 
-    const plan = await getActivePlan(userId);
-    if (!plan) {
-      return { type: "no_plan" };
-    }
-
-    const nextItem = await getNextPlanItem(userId, plan.id);
-    if (!nextItem) {
-      return { type: "empty_plan", planId: plan.id };
-    }
-
+async function readTodayRecommendation(userId: string): Promise<TodayRecommendation> {
+  const inProgress = await getInProgressSession(userId);
+  if (inProgress) {
     return {
-      type: "ready",
-      planId: plan.id,
-      planItemId: nextItem.planItemId,
-      routineId: nextItem.routineId,
-      routineName: nextItem.routineName,
-    };
-  } catch (err) {
-    return {
-      type: "error",
-      reason: err instanceof Error ? err.message : "Unknown error in getTodayRecommendation",
+      type: "in_progress",
+      sessionId: inProgress.sessionId,
+      planItemId: inProgress.planItemId,
+      routineId: inProgress.routineId,
+      routineName: inProgress.routineName,
     };
   }
+
+  const plan = await getActivePlan(userId);
+  if (!plan) {
+    return { type: "no_plan" };
+  }
+
+  const nextItem = await getNextPlanItem(userId, plan.id);
+  if (!nextItem) {
+    return { type: "empty_plan", planId: plan.id };
+  }
+
+  return {
+    type: "ready",
+    planId: plan.id,
+    planItemId: nextItem.planItemId,
+    routineId: nextItem.routineId,
+    routineName: nextItem.routineName,
+  };
+}
+
+export async function getTodayRecommendation(userId: string): Promise<TodayRecommendation> {
+  for (let attempt = 1; attempt <= RETRY_ATTEMPTS; attempt++) {
+    try {
+      return await readTodayRecommendation(userId);
+    } catch (err) {
+      if (attempt === RETRY_ATTEMPTS) {
+        return {
+          type: "error",
+          reason: err instanceof Error ? err.message : "Unknown error in getTodayRecommendation",
+        };
+      }
+      await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
+    }
+  }
+  // Unreachable — the loop above always returns on its final attempt.
+  throw new Error("getTodayRecommendation: unreachable");
 }

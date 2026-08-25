@@ -43,7 +43,7 @@ export function ActivatePlanButton({
   }
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex w-full flex-col gap-2">
       <ConfirmPanel
         onCancel={() => setConfirming(false)}
         message={

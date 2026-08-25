@@ -1,11 +1,13 @@
+import { BootLoading } from "@/components/app-shell/boot-loading";
+
+/**
+ * Today is the app's real entry point (manifest.ts's `start_url: "/"`
+ * redirects here) — this is the Suspense fallback Next.js shows for
+ * exactly as long as TodayPage's own async body (requireUser + profile +
+ * getTodayRecommendation) takes, no more, no less: no artificial minimum,
+ * no timer. See docs' app-boot investigation notes for why this used to be
+ * a generic skeleton and now uses SCOPE instead.
+ */
 export default function TodayLoading() {
-  return (
-    <div className="flex flex-1 flex-col pt-8">
-      <div className="h-3 w-20 animate-pulse rounded-full bg-muted" />
-      <div className="mt-8 h-3 w-28 animate-pulse rounded-full bg-muted" />
-      <div className="mt-8 h-24 w-4/5 animate-pulse rounded-md bg-muted" />
-      <div className="mt-8 h-3 w-16 animate-pulse rounded-full bg-muted" />
-      <div className="mt-8 h-12 w-full animate-pulse rounded-md bg-muted" />
-    </div>
-  );
+  return <BootLoading phase="preparing" />;
 }
